@@ -3,18 +3,18 @@
 # Downloads the latest release and runs the platform-specific install script
 #
 # Usage:
-#   curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
+#   curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
 #
 # With custom API URL:
-#   curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo DEVICE_MANAGER_API_URL=https://your-api.example.com sh -
+#   curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo DEVICE_MANAGER_API_URL=https://your-api.example.com sh -
 #
 # Install specific version:
-#   curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo INSTALL_VERSION=v1.0.0 sh -
+#   curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo INSTALL_VERSION=v1.0.0 sh -
 
 set -e
 
 # Configuration
-GITHUB_REPO="${GITHUB_REPO:-YOUR_ORG/DonkeyWork-DeviceManager}"
+GITHUB_REPO="${GITHUB_REPO:-andyjmorgan/DonkeyWork-DeviceManager}"
 INSTALL_VERSION="${INSTALL_VERSION:-latest}"
 API_BASE_URL="${DEVICE_MANAGER_API_URL:-https://devicemanager.donkeywork.dev}"
 

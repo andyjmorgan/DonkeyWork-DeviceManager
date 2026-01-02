@@ -14,7 +14,7 @@ The easiest way to install the device client is using our one-liner installer, w
 ### Linux (Ubuntu, Debian, RHEL, CentOS, Fedora)
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
+curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
 ```
 
 **Supported:** x86_64 (amd64)
@@ -22,7 +22,7 @@ curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/ma
 ### macOS
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
+curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
 ```
 
 **Supported:** Apple Silicon (ARM64)
@@ -32,7 +32,7 @@ curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/ma
 Open PowerShell as Administrator and run:
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.ps1 | iex
 ```
 
 **Supported:** x86_64 (amd64)
@@ -43,12 +43,12 @@ iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/ma
 
 **Linux/macOS:**
 ```bash
-curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo INSTALL_VERSION=v1.0.0 sh -
+curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo INSTALL_VERSION=v1.0.0 sh -
 ```
 
 **Windows:**
 ```powershell
-$env:INSTALL_VERSION = "v1.0.0"; iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.ps1 | iex
+$env:INSTALL_VERSION = "v1.0.0"; iwr -useb https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.ps1 | iex
 ```
 
 ### Custom API URL
@@ -57,19 +57,19 @@ If you're running your own instance of the Device Manager API:
 
 **Linux/macOS:**
 ```bash
-curl -sfL https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.sh | sudo DEVICE_MANAGER_API_URL=https://your-api.example.com sh -
+curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo DEVICE_MANAGER_API_URL=https://your-api.example.com sh -
 ```
 
 **Windows:**
 ```powershell
-$env:DEVICE_MANAGER_API_URL = "https://your-api.example.com"; iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.ps1 | iex
+$env:DEVICE_MANAGER_API_URL = "https://your-api.example.com"; iwr -useb https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.ps1 | iex
 ```
 
 ## Manual Installation
 
 If you prefer to install manually:
 
-1. **Download the release** for your platform from the [Releases page](https://github.com/YOUR_ORG/DonkeyWork-DeviceManager/releases)
+1. **Download the release** for your platform from the [Releases page](https://github.com/andyjmorgan/DonkeyWork-DeviceManager/releases)
 
 2. **Extract the archive**
 
@@ -316,8 +316,8 @@ OSQuery is required for hardware inventory queries. If it's not installed:
 ## Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/YOUR_ORG/DonkeyWork-DeviceManager/issues
-- Documentation: https://github.com/YOUR_ORG/DonkeyWork-DeviceManager
+- GitHub Issues: https://github.com/andyjmorgan/DonkeyWork-DeviceManager/issues
+- Documentation: https://github.com/andyjmorgan/DonkeyWork-DeviceManager
 
 ## Security
 

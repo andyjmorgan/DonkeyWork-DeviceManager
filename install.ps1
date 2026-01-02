@@ -2,20 +2,20 @@
 # Downloads the latest release and runs the platform-specific install script
 #
 # Usage:
-#   iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.ps1 | iex
+#   iwr -useb https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.ps1 | iex
 #
 # With custom API URL:
-#   $env:DEVICE_MANAGER_API_URL = "https://your-api.example.com"; iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.ps1 | iex
+#   $env:DEVICE_MANAGER_API_URL = "https://your-api.example.com"; iwr -useb https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.ps1 | iex
 #
 # Install specific version:
-#   $env:INSTALL_VERSION = "v1.0.0"; iwr -useb https://raw.githubusercontent.com/YOUR_ORG/DonkeyWork-DeviceManager/main/install.ps1 | iex
+#   $env:INSTALL_VERSION = "v1.0.0"; iwr -useb https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.ps1 | iex
 
 #Requires -RunAsAdministrator
 
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$GitHubRepo = if ($env:GITHUB_REPO) { $env:GITHUB_REPO } else { "YOUR_ORG/DonkeyWork-DeviceManager" }
+$GitHubRepo = if ($env:GITHUB_REPO) { $env:GITHUB_REPO } else { "andyjmorgan/DonkeyWork-DeviceManager" }
 $InstallVersion = if ($env:INSTALL_VERSION) { $env:INSTALL_VERSION } else { "latest" }
 $ApiBaseUrl = if ($env:DEVICE_MANAGER_API_URL) { $env:DEVICE_MANAGER_API_URL } else { "https://devicemanager.donkeywork.dev" }
 

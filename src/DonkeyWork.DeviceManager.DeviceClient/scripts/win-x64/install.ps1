@@ -1,0 +1,175 @@
+# DonkeyWork Device Manager Client - Windows Installation Script
+# Installs the device client as a Windows Service
+
+#Requires -RunAsAdministrator
+
+param(
+    [string]$ServiceName = "DonkeyWorkDeviceClient",
+    [string]$DisplayName = "DonkeyWork Device Manager Client",
+    [string]$Description = "IoT device client for DonkeyWork Device Manager",
+    [string]$InstallPath = "C:\Program Files\DonkeyWork\DeviceClient",
+    [switch]$Help
+)
+
+# Hardcoded API URL
+$ApiBaseUrl = "https://devicemanager.donkeywork.dev"
+
+function Show-Help {
+    Write-Host @"
+DonkeyWork Device Manager Client - Windows Installation
+
+USAGE:
+    .\install.ps1 [-InstallPath <path>] [-ServiceName <name>]
+
+OPTIONS:
+    -InstallPath    Installation directory (default: C:\Program Files\DonkeyWork\DeviceClient)
+    -ServiceName    Windows service name (default: DonkeyWorkDeviceClient)
+    -Help           Show this help message
+
+EXAMPLES:
+    .\install.ps1
+    .\install.ps1 -InstallPath "D:\Apps\DeviceClient"
+
+NOTES:
+    - This script must be run as Administrator
+    - .NET 10.0 runtime will be included in the installation
+    - The service will be configured to start automatically
+    - API endpoint: https://devicemanager.donkeywork.dev
+    - Configuration file will be created at: <InstallPath>\appsettings.json
+
+"@
+    exit 0
+}
+
+if ($Help) {
+    Show-Help
+}
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "DonkeyWork Device Manager Client" -ForegroundColor Cyan
+Write-Host "Windows Installation Script" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Step 1: Check if service already exists
+Write-Host "[1/6] Checking for existing service..." -ForegroundColor Yellow
+$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($existingService) {
+    Write-Host "Service '$ServiceName' already exists. Stopping and removing..." -ForegroundColor Yellow
+    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+    sc.exe delete $ServiceName
+    Start-Sleep -Seconds 2
+    Write-Host "Existing service removed." -ForegroundColor Green
+}
+
+# Step 2: Create installation directory
+Write-Host "[2/6] Creating installation directory..." -ForegroundColor Yellow
+if (Test-Path $InstallPath) {
+    Write-Host "Installation directory already exists. Removing old files..." -ForegroundColor Yellow
+    Remove-Item -Path $InstallPath -Recurse -Force
+}
+New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
+Write-Host "Installation directory created at: $InstallPath" -ForegroundColor Green
+
+# Step 3: Publish application
+Write-Host "[3/6] Publishing application (this may take a few minutes)..." -ForegroundColor Yellow
+$projectPath = Join-Path $PSScriptRoot "..\..\"
+$publishOutput = Join-Path $PSScriptRoot "publish"
+
+# Clean previous publish output
+if (Test-Path $publishOutput) {
+    Remove-Item -Path $publishOutput -Recurse -Force
+}
+
+# Publish as self-contained for win-x64
+dotnet publish $projectPath `
+    --configuration Release `
+    --runtime win-x64 `
+    --self-contained true `
+    --output $publishOutput `
+    -p:PublishSingleFile=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Failed to publish application" -ForegroundColor Red
+    exit 1
+}
+Write-Host "Application published successfully." -ForegroundColor Green
+
+# Step 4: Copy files to installation directory
+Write-Host "[4/6] Copying files to installation directory..." -ForegroundColor Yellow
+Copy-Item -Path "$publishOutput\*" -Destination $InstallPath -Recurse -Force
+Write-Host "Files copied successfully." -ForegroundColor Green
+
+# Step 5: Create configuration file
+Write-Host "[5/6] Creating configuration file..." -ForegroundColor Yellow
+$configPath = Join-Path $InstallPath "appsettings.json"
+$config = @"
+{
+  "DeviceManagerConfiguration": {
+    "ApiBaseUrl": "$ApiBaseUrl"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  }
+}
+"@
+Set-Content -Path $configPath -Value $config -Force
+Write-Host "Configuration file created at: $configPath" -ForegroundColor Green
+
+# Step 6: Install and start Windows Service
+Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
+$exePath = Join-Path $InstallPath "DonkeyWork.DeviceManager.DeviceClient.exe"
+
+# Create the service
+sc.exe create $ServiceName `
+    binPath= "`"$exePath`"" `
+    start= auto `
+    DisplayName= "$DisplayName"
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Failed to create Windows Service" -ForegroundColor Red
+    exit 1
+}
+
+# Set service description
+sc.exe description $ServiceName "$Description"
+
+# Configure service recovery options (restart on failure)
+sc.exe failure $ServiceName reset= 86400 actions= restart/60000/restart/60000/restart/60000
+
+# Start the service
+Write-Host "Starting service..." -ForegroundColor Yellow
+Start-Service -Name $ServiceName
+
+# Wait a moment and check service status
+Start-Sleep -Seconds 2
+$service = Get-Service -Name $ServiceName
+if ($service.Status -eq "Running") {
+    Write-Host "Service started successfully!" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: Service was created but is not running. Status: $($service.Status)" -ForegroundColor Yellow
+    Write-Host "Check Windows Event Viewer for error details." -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Installation Complete!" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Service Name:       $ServiceName" -ForegroundColor White
+Write-Host "Installation Path:  $InstallPath" -ForegroundColor White
+Write-Host "Configuration:      $configPath" -ForegroundColor White
+Write-Host "API Base URL:       $ApiBaseUrl" -ForegroundColor White
+Write-Host ""
+Write-Host "NEXT STEPS:" -ForegroundColor Yellow
+Write-Host "1. The device client service is now running" -ForegroundColor White
+Write-Host "2. View logs in Windows Event Viewer (Application log)" -ForegroundColor White
+Write-Host "3. Manage service: services.msc or 'sc.exe query $ServiceName'" -ForegroundColor White
+Write-Host "4. To uninstall: Run .\uninstall.ps1" -ForegroundColor White
+Write-Host ""
+Write-Host "For more information, visit: https://github.com/donkeywork/device-manager" -ForegroundColor Cyan

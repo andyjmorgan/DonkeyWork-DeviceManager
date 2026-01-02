@@ -1,0 +1,37 @@
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.login-card {
+  max-width: 400px;
+  width: 100%;
+}
+
+.login-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+}
+
+.login-logo {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+}
+
+.login-text {
+  font-size: 1.1rem;
+  margin: 0;
+  text-align: center;
+}
+
+.login-button {
+  width: 100%;
+  max-width: 200px;
+}

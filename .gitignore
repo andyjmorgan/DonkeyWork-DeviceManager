@@ -16,7 +16,7 @@
 
 # Mono auto generated files
 mono_crash.*
-
+data/
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -398,6 +398,8 @@ FodyWeavers.xsd
 
 # VS Code files for those working on multiple tools
 .vscode/*
+.idea
+.claude
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -416,3 +418,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+appsettings.Development.json
+docker-compose.yml

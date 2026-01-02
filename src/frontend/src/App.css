@@ -1,0 +1,21 @@
+.app-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.logo-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.app-logo {
+  width: 192px;
+  height: 192px;
+  object-fit: contain;
+}
+
+.welcome-card {
+  margin-top: 2rem;
+}

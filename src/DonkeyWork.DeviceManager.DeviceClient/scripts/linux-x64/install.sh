@@ -1,0 +1,219 @@
+#!/bin/bash
+# DonkeyWork Device Manager Client - Linux Installation Script
+# Installs the device client as a systemd service
+
+set -e
+
+# Default values
+SERVICE_NAME="donkeywork-device-client"
+INSTALL_PATH="/opt/donkeywork/device-client"
+API_BASE_URL="https://devicemanager.donkeywork.dev"
+SERVICE_USER="donkeywork"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+show_help() {
+    cat << EOF
+DonkeyWork Device Manager Client - Linux Installation
+
+USAGE:
+    sudo ./install.sh [OPTIONS]
+
+OPTIONS:
+    --service-name <name>   Systemd service name (default: donkeywork-device-client)
+    --service-user <user>   User to run the service (default: donkeywork)
+    --help                  Show this help message
+
+EXAMPLES:
+    sudo ./install.sh
+    sudo ./install.sh --service-name "my-device-client"
+
+NOTES:
+    - This script must be run as root (use sudo)
+    - .NET 10.0 runtime will be included in the installation
+    - The service will be configured to start automatically
+    - Installs to: /opt/donkeywork/device-client
+    - API endpoint: https://devicemanager.donkeywork.dev
+
+EOF
+    exit 0
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --service-name)
+            SERVICE_NAME="$2"
+            shift 2
+            ;;
+        --service-user)
+            SERVICE_USER="$2"
+            shift 2
+            ;;
+        --help)
+            show_help
+            ;;
+        *)
+            echo -e "${RED}ERROR: Unknown option: $1${NC}"
+            echo "Run './install.sh --help' for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+   echo -e "${RED}ERROR: This script must be run as root (use sudo)${NC}"
+   exit 1
+fi
+
+# Check if dotnet is available
+if ! command -v dotnet &> /dev/null; then
+    echo -e "${RED}ERROR: dotnet CLI is not installed${NC}"
+    echo "Please install .NET 10.0 SDK first: https://dotnet.microsoft.com/download"
+    exit 1
+fi
+
+echo -e "${CYAN}========================================${NC}"
+echo -e "${CYAN}DonkeyWork Device Manager Client${NC}"
+echo -e "${CYAN}Linux Installation Script${NC}"
+echo -e "${CYAN}========================================${NC}"
+echo ""
+
+# Step 1: Stop and remove existing service
+echo -e "${YELLOW}[1/7] Checking for existing service...${NC}"
+if systemctl list-units --full -all | grep -Fq "$SERVICE_NAME.service"; then
+    echo -e "${YELLOW}Service '$SERVICE_NAME' already exists. Stopping and removing...${NC}"
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "/etc/systemd/system/$SERVICE_NAME.service"
+    systemctl daemon-reload
+    echo -e "${GREEN}Existing service removed.${NC}"
+fi
+
+# Step 2: Create service user
+echo -e "${YELLOW}[2/7] Creating service user...${NC}"
+if ! id "$SERVICE_USER" &>/dev/null; then
+    useradd --system --no-create-home --shell /bin/false "$SERVICE_USER"
+    echo -e "${GREEN}User '$SERVICE_USER' created.${NC}"
+else
+    echo -e "${YELLOW}User '$SERVICE_USER' already exists.${NC}"
+fi
+
+# Step 3: Create installation directory
+echo -e "${YELLOW}[3/7] Creating installation directory...${NC}"
+if [ -d "$INSTALL_PATH" ]; then
+    echo -e "${YELLOW}Installation directory already exists. Removing old files...${NC}"
+    rm -rf "$INSTALL_PATH"
+fi
+mkdir -p "$INSTALL_PATH"
+echo -e "${GREEN}Installation directory created at: $INSTALL_PATH${NC}"
+
+# Step 4: Publish application
+echo -e "${YELLOW}[4/7] Publishing application (this may take a few minutes)...${NC}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_PATH="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PUBLISH_OUTPUT="$SCRIPT_DIR/publish"
+
+# Clean previous publish output
+rm -rf "$PUBLISH_OUTPUT"
+
+# Publish as self-contained for linux-x64
+dotnet publish "$PROJECT_PATH" \
+    --configuration Release \
+    --runtime linux-x64 \
+    --self-contained true \
+    --output "$PUBLISH_OUTPUT" \
+    -p:PublishSingleFile=true \
+    -p:IncludeNativeLibrariesForSelfExtract=true
+
+echo -e "${GREEN}Application published successfully.${NC}"
+
+# Step 5: Copy files to installation directory
+echo -e "${YELLOW}[5/7] Copying files to installation directory...${NC}"
+cp -r "$PUBLISH_OUTPUT"/* "$INSTALL_PATH/"
+chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH"
+echo -e "${GREEN}Files copied successfully.${NC}"
+
+# Step 6: Create configuration file
+echo -e "${YELLOW}[6/7] Creating configuration file...${NC}"
+cat > "$INSTALL_PATH/appsettings.json" << EOF
+{
+  "DeviceManagerConfiguration": {
+    "ApiBaseUrl": "$API_BASE_URL"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  }
+}
+EOF
+chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH/appsettings.json"
+echo -e "${GREEN}Configuration file created at: $INSTALL_PATH/appsettings.json${NC}"
+
+# Step 7: Create and start systemd service
+echo -e "${YELLOW}[7/7] Installing systemd service...${NC}"
+cat > "/etc/systemd/system/$SERVICE_NAME.service" << EOF
+[Unit]
+Description=DonkeyWork Device Manager Client
+After=network.target
+
+[Service]
+Type=notify
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_PATH
+ExecStart=$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=$SERVICE_NAME
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd, enable and start service
+systemctl daemon-reload
+systemctl enable "$SERVICE_NAME"
+echo -e "${YELLOW}Starting service...${NC}"
+systemctl start "$SERVICE_NAME"
+
+# Wait a moment and check service status
+sleep 2
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    echo -e "${GREEN}Service started successfully!${NC}"
+else
+    echo -e "${YELLOW}WARNING: Service was created but is not running.${NC}"
+    echo -e "${YELLOW}Check logs with: journalctl -u $SERVICE_NAME -f${NC}"
+fi
+
+echo ""
+echo -e "${CYAN}========================================${NC}"
+echo -e "${GREEN}Installation Complete!${NC}"
+echo -e "${CYAN}========================================${NC}"
+echo ""
+echo -e "Service Name:       ${SERVICE_NAME}"
+echo -e "Installation Path:  ${INSTALL_PATH}"
+echo -e "Configuration:      ${INSTALL_PATH}/appsettings.json"
+echo -e "API Base URL:       ${API_BASE_URL}"
+echo -e "Running as User:    ${SERVICE_USER}"
+echo ""
+echo -e "${YELLOW}NEXT STEPS:${NC}"
+echo -e "1. The device client service is now running"
+echo -e "2. View logs:        journalctl -u $SERVICE_NAME -f"
+echo -e "3. Check status:     systemctl status $SERVICE_NAME"
+echo -e "4. Stop service:     systemctl stop $SERVICE_NAME"
+echo -e "5. To uninstall:     Run ./uninstall.sh"
+echo ""
+echo -e "${CYAN}For more information, visit: https://github.com/donkeywork/device-manager${NC}"

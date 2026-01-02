@@ -16,4 +16,9 @@ public interface IDeviceManagementService
     /// Deletes a device from both the database and Keycloak.
     /// </summary>
     Task DeleteDeviceAsync(Guid deviceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates a device's description.
+    /// </summary>
+    Task UpdateDeviceDescriptionAsync(Guid deviceId, string? description, CancellationToken cancellationToken = default);
 }

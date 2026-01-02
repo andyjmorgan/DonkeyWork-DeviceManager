@@ -1,7 +1,4 @@
 import { useRef, useState, useEffect } from 'react';
-import { Menubar } from 'primereact/menubar';
-import { Avatar } from 'primereact/avatar';
-import { Menu } from 'primereact/menu';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
@@ -14,7 +11,6 @@ import { Column } from 'primereact/column';
 import { Paginator } from 'primereact/paginator';
 import { Tag } from 'primereact/tag';
 import { SplitButton } from 'primereact/splitbutton';
-import { loadTheme, getStoredTheme } from '../utils/theme';
 import { lookupDeviceRegistration, completeDeviceRegistration } from '../services/deviceRegistrationService';
 import { getDevices, updateDeviceDescription, deleteDevice } from '../services/deviceService';
 import { userHubService } from '../services/userHubService';
@@ -24,11 +20,9 @@ import type { DeviceStatusNotification } from '../types/notifications';
 import './Dashboard.css';
 
 function Dashboard() {
-  const menuRef = useRef<Menu>(null);
   const toastRef = useRef<Toast>(null);
   const hubInitialized = useRef(false);
   const devicesLoadedForPage = useRef<number | null>(null);
-  const [theme, setTheme] = useState<'dark' | 'light'>(getStoredTheme());
   const [registerDialogVisible, setRegisterDialogVisible] = useState(false);
   const [deviceCode, setDeviceCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -44,10 +38,6 @@ function Dashboard() {
   const [deleteConfirmDialogVisible, setDeleteConfirmDialogVisible] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<DeviceResponse | null>(null);
   const [newDescription, setNewDescription] = useState('');
-
-  useEffect(() => {
-    loadTheme(theme);
-  }, [theme]);
 
   // Auto-select building if there's only one
   useEffect(() => {
@@ -285,18 +275,6 @@ function Dashboard() {
     }
   };
 
-  const handleThemeToggle = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    loadTheme(newTheme);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    window.location.href = '/';
-  };
-
   const handleRegisterDevice = () => {
     setRegisterDialogVisible(true);
     setDeviceCode('');
@@ -306,12 +284,7 @@ function Dashboard() {
   };
 
   const handleDownloadClient = () => {
-    toastRef.current?.show({
-      severity: 'info',
-      summary: 'Coming Soon',
-      detail: 'Client download will be available soon',
-      life: 3000,
-    });
+    window.open('https://github.com/andyjmorgan/DonkeyWork-DeviceManager/releases', '_blank');
   };
 
   const handleLookupDeviceCode = async () => {
@@ -412,45 +385,9 @@ function Dashboard() {
     setSelectedRoom(null);
   };
 
-  const userMenuItems = [
-    {
-      label: 'Theme',
-      icon: theme === 'dark' ? 'pi pi-sun' : 'pi pi-moon',
-      command: handleThemeToggle,
-    },
-    {
-      separator: true,
-    },
-    {
-      label: 'Logout',
-      icon: 'pi pi-sign-out',
-      command: handleLogout,
-    },
-  ];
-
-  const start = (
-    <div className="header-brand">
-      <img src="/donkeywork.png" alt="DonkeyWork" className="header-logo" />
-      <span className="header-title">Device Manager</span>
-    </div>
-  );
-
-  const userMenu = (
-    <div className="user-menu">
-      <Avatar
-        icon="pi pi-user"
-        shape="circle"
-        style={{ cursor: 'pointer' }}
-        onClick={(e) => menuRef.current?.toggle(e)}
-      />
-      <Menu model={userMenuItems} popup ref={menuRef} />
-    </div>
-  );
-
   return (
     <div className="dashboard-page">
       <Toast ref={toastRef} />
-      <Menubar model={[]} start={start} end={userMenu} />
       <div className="dashboard-container">
         <h2>Welcome to DonkeyWork Device Manager</h2>
 

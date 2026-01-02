@@ -48,6 +48,15 @@ public static class DeviceEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status500InternalServerError);
 
+        group.MapPut("{id:guid}/description", UpdateDeviceDescription)
+            .WithName("UpdateDeviceDescription")
+            .WithSummary("Update device description")
+            .WithDescription("Updates the description of a specific device")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status500InternalServerError);
+
         return endpoints;
     }
 
@@ -103,6 +112,37 @@ public static class DeviceEndpoints
             return Results.Problem(
                 title: "Failed to Delete Device",
                 detail: "An unexpected error occurred while deleting the device",
+                statusCode: StatusCodes.Status500InternalServerError
+            );
+        }
+    }
+
+    private static async Task<IResult> UpdateDeviceDescription(
+        Guid id,
+        UpdateDeviceDescriptionRequest request,
+        IDeviceManagementService deviceManagementService,
+        ILogger<IDeviceManagementService> logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await deviceManagementService.UpdateDeviceDescriptionAsync(id, request.Description, cancellationToken);
+
+            logger.LogInformation("Device {DeviceId} description updated successfully", id);
+
+            return Results.NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogWarning(ex, "Failed to update device {DeviceId} description", id);
+            return Results.NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating device {DeviceId} description", id);
+            return Results.Problem(
+                title: "Failed to Update Device Description",
+                detail: "An unexpected error occurred while updating the device description",
                 statusCode: StatusCodes.Status500InternalServerError
             );
         }

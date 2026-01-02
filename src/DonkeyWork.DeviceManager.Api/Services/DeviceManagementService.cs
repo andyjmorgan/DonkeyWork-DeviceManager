@@ -127,6 +127,31 @@ public class DeviceManagementService : IDeviceManagementService
             deviceId, tenantId);
     }
 
+    /// <inheritdoc />
+    public async Task UpdateDeviceDescriptionAsync(Guid deviceId, string? description, CancellationToken cancellationToken = default)
+    {
+        var tenantId = _requestContextProvider.Context.TenantId;
+
+        _logger.LogInformation("Updating description for device {DeviceId} in tenant {TenantId}", deviceId, tenantId);
+
+        // Find the device
+        var device = await _dbContext.Devices
+            .FirstOrDefaultAsync(d => d.Id == deviceId, cancellationToken);
+
+        if (device == null)
+        {
+            throw new InvalidOperationException($"Device with ID '{deviceId}' not found or does not belong to tenant '{tenantId}'.");
+        }
+
+        // Update the description
+        device.Description = description ?? string.Empty;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Successfully updated description for device {DeviceId} in tenant {TenantId}",
+            deviceId, tenantId);
+    }
+
     private async Task<string> GetAdminAccessTokenAsync(CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient();

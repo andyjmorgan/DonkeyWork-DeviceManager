@@ -1,0 +1,111 @@
+.rooms-page {
+  padding: 1.5rem;
+  max-width: 1400px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-title h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.count-badge {
+  font-size: 0.875rem;
+  color: var(--text-color-secondary);
+  background: var(--surface-100);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-weight: 500;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.filter-dropdown {
+  min-width: 200px;
+}
+
+.page-content {
+  background: var(--surface-card);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.rooms-table {
+  width: 100%;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.form-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-field label {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.w-full {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .rooms-page {
+    padding: 1rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .filter-dropdown {
+    width: 100%;
+  }
+
+  .page-content {
+    padding: 1rem;
+  }
+}

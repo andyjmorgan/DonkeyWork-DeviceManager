@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Callback from './components/Callback';
 import Dashboard from './components/Dashboard';
+import Buildings from './pages/Buildings';
+import Rooms from './pages/Rooms';
+import Layout from './components/Layout/Layout';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { authenticatedFetch } from './utils/apiClient';
 import './App.css'
@@ -9,7 +13,6 @@ import './App.css'
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const path = window.location.pathname;
   const hasValidated = useRef(false);
 
   useEffect(() => {
@@ -17,11 +20,6 @@ function App() {
       // Prevent double execution in React StrictMode
       if (hasValidated.current) return;
       hasValidated.current = true;
-      // Skip validation on callback page
-      if (path === '/callback') {
-        setIsLoading(false);
-        return;
-      }
 
       const accessToken = localStorage.getItem('access_token');
 
@@ -53,11 +51,7 @@ function App() {
     };
 
     validateAuth();
-  }, [path]);
-
-  if (path === '/callback') {
-    return <Callback />;
-  }
+  }, []);
 
   if (isLoading) {
     return (
@@ -67,7 +61,30 @@ function App() {
     );
   }
 
-  return isAuthenticated ? <Dashboard /> : <Login />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/callback" element={<Callback />} />
+        {isAuthenticated ? (
+          <Route path="/*" element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/buildings" element={<Buildings />} />
+                <Route path="/rooms" element={<Rooms />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+          } />
+        ) : (
+          <>
+            <Route path="/" element={<Login />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </>
+        )}
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App

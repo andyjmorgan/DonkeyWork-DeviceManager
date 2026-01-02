@@ -142,6 +142,9 @@ public static class ServiceCollectionExtensions
         // Register device token service for token refresh
         services.AddScoped<IDeviceTokenService, DeviceTokenService>();
 
+        // Register organization service (buildings and rooms)
+        services.AddScoped<IOrganizationService, OrganizationService>();
+
         return services;
     }
 

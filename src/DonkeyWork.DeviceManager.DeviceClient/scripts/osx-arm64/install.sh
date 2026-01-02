@@ -110,8 +110,28 @@ fi
 mkdir -p "$INSTALL_PATH"
 echo -e "${GREEN}Installation directory created at: $INSTALL_PATH${NC}"
 
-# Step 3: Publish application
-echo -e "${YELLOW}[3/6] Publishing application for $RUNTIME (this may take a few minutes)...${NC}"
+# Step 3: Install OSQuery (if not already installed)
+echo -e "${YELLOW}[3/7] Checking OSQuery installation...${NC}"
+if ! command -v osqueryi &> /dev/null; then
+    echo -e "${YELLOW}OSQuery not found. Installing via Homebrew...${NC}"
+
+    if command -v brew &> /dev/null; then
+        brew install --cask osquery
+        if command -v osqueryi &> /dev/null; then
+            echo -e "${GREEN}OSQuery installed successfully.${NC}"
+        else
+            echo -e "${YELLOW}WARNING: OSQuery installation failed. Query features will not work.${NC}"
+        fi
+    else
+        echo -e "${RED}WARNING: Homebrew not found. Please install OSQuery manually.${NC}"
+        echo -e "${YELLOW}Visit: https://osquery.io/downloads/official${NC}"
+    fi
+else
+    echo -e "${GREEN}OSQuery is already installed.${NC}"
+fi
+
+# Step 4: Publish application
+echo -e "${YELLOW}[4/7] Publishing application for $RUNTIME (this may take a few minutes)...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_PATH="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PUBLISH_OUTPUT="$SCRIPT_DIR/publish"
@@ -130,14 +150,14 @@ dotnet publish "$PROJECT_PATH" \
 
 echo -e "${GREEN}Application published successfully.${NC}"
 
-# Step 4: Copy files to installation directory
-echo -e "${YELLOW}[4/6] Copying files to installation directory...${NC}"
+# Step 5: Copy files to installation directory
+echo -e "${YELLOW}[5/7] Copying files to installation directory...${NC}"
 cp -r "$PUBLISH_OUTPUT"/* "$INSTALL_PATH/"
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 echo -e "${GREEN}Files copied successfully.${NC}"
 
-# Step 5: Create configuration file
-echo -e "${YELLOW}[5/6] Creating configuration file...${NC}"
+# Step 6: Create configuration file
+echo -e "${YELLOW}[6/7] Creating configuration file...${NC}"
 cat > "$INSTALL_PATH/appsettings.json" << EOF
 {
   "DeviceManagerConfiguration": {
@@ -154,8 +174,8 @@ cat > "$INSTALL_PATH/appsettings.json" << EOF
 EOF
 echo -e "${GREEN}Configuration file created at: $INSTALL_PATH/appsettings.json${NC}"
 
-# Step 6: Create and load launchd service
-echo -e "${YELLOW}[6/6] Installing launchd service...${NC}"
+# Step 7: Create and load launchd service
+echo -e "${YELLOW}[7/7] Installing launchd service...${NC}"
 cat > "$PLIST_PATH" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -35,17 +35,13 @@ public class UserAuthService : IUserAuthService
     public async Task<TokenResponse> AuthorizeUserAsync(string code, string state, string redirectUri)
     {
         // Use InternalAuthority for backchannel calls if available (to avoid hairpin NAT in k8s)
-        // Fall back to Authority if InternalAuthority is not set (e.g., local development)
-        var backchannelAuthority = _keycloakConfig.InternalAuthority ?? _keycloakConfig.Authority;
-        var usingInternalAuthority = _keycloakConfig.InternalAuthority != null;
-
         _logger.LogInformation("Using {AuthorityType} for backchannel calls: {Authority}",
-            usingInternalAuthority ? "InternalAuthority" : "Authority",
-            backchannelAuthority);
+            _keycloakConfig.InternalAuthority != null ? "InternalAuthority" : "Authority",
+            _keycloakConfig.BackchannelAuthority);
 
         _logger.LogInformation("Using redirectUri: {RedirectUri}", redirectUri);
 
-        var authorityUri = new Uri(backchannelAuthority);
+        var authorityUri = new Uri(_keycloakConfig.BackchannelAuthority);
         var tokenEndpoint = $"{authorityUri.GetLeftPart(UriPartial.Authority)}{authorityUri.AbsolutePath}/protocol/openid-connect/token";
 
         var httpClient = _httpClientFactory.CreateClient();
@@ -182,7 +178,7 @@ public class UserAuthService : IUserAuthService
                 usingInternalAuthority ? "InternalAuthority" : "Authority",
                 backchannelAuthority);
 
-            var authorityUri = new Uri(backchannelAuthority);
+            var authorityUri = new Uri(_keycloakConfig.BackchannelAuthority);
             var baseUrl = $"{authorityUri.GetLeftPart(UriPartial.Authority)}";
             var getUserUrl = $"{baseUrl}/admin/realms/{realm}/users/{keycloakUserId}";
 
@@ -259,7 +255,7 @@ public class UserAuthService : IUserAuthService
             usingInternalAuthority ? "InternalAuthority" : "Authority",
             backchannelAuthority);
 
-        var authorityUri = new Uri(backchannelAuthority);
+        var authorityUri = new Uri(_keycloakConfig.BackchannelAuthority);
         var tokenEndpoint = $"{authorityUri.GetLeftPart(UriPartial.Authority)}{authorityUri.AbsolutePath}/protocol/openid-connect/token";
 
         var tokenRequest = new Dictionary<string, string>
@@ -299,7 +295,7 @@ public class UserAuthService : IUserAuthService
             usingInternalAuthority ? "InternalAuthority" : "Authority",
             backchannelAuthority);
 
-        var authorityUri = new Uri(backchannelAuthority);
+        var authorityUri = new Uri(_keycloakConfig.BackchannelAuthority);
         var tokenEndpoint = $"{authorityUri.GetLeftPart(UriPartial.Authority)}{authorityUri.AbsolutePath}/protocol/openid-connect/token";
 
         var httpClient = _httpClientFactory.CreateClient();

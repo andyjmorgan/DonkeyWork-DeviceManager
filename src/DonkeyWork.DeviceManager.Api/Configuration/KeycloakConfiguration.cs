@@ -47,4 +47,10 @@ public record KeycloakConfiguration
     /// </summary>
     [Required]
     public required string AdminClientSecret { get; init; }
+
+    /// <summary>
+    /// Gets the authority to use for backchannel HTTP calls.
+    /// Returns InternalAuthority if set (to avoid hairpin NAT in k8s), otherwise returns Authority.
+    /// </summary>
+    public string BackchannelAuthority => InternalAuthority ?? Authority;
 }

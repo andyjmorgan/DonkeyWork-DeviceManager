@@ -208,9 +208,10 @@ public class DeviceRegistrationService : IDeviceRegistrationService
     private async Task<string> GetAdminAccessTokenAsync(CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient();
-        var tokenUrl = $"{_keycloakConfig.Authority}/protocol/openid-connect/token";
+        var tokenUrl = $"{_keycloakConfig.BackchannelAuthority}/protocol/openid-connect/token";
 
-        _logger.LogInformation("Requesting admin access token from: {TokenUrl}", tokenUrl);
+        _logger.LogInformation("Requesting admin access token using {AuthorityType}: {TokenUrl}",
+            _keycloakConfig.InternalAuthority != null ? "InternalAuthority" : "Authority", tokenUrl);
         _logger.LogInformation("Using AdminClientId: {AdminClientId}", _keycloakConfig.AdminClientId);
 
         var tokenRequest = new FormUrlEncodedContent(new[]
@@ -250,12 +251,13 @@ public class DeviceRegistrationService : IDeviceRegistrationService
         CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient();
-        var realm = _keycloakConfig.Authority.Split('/').Last();
-        var baseUrl = _keycloakConfig.Authority.Replace($"/realms/{realm}", "");
+        var realm = _keycloakConfig.BackchannelAuthority.Split('/').Last();
+        var baseUrl = _keycloakConfig.BackchannelAuthority.Replace($"/realms/{realm}", "");
         var createUserUrl = $"{baseUrl}/admin/realms/{realm}/users";
 
-        _logger.LogInformation("Creating device user in Keycloak");
-        _logger.LogInformation("Authority: {Authority}", _keycloakConfig.Authority);
+        _logger.LogInformation("Creating device user in Keycloak using {AuthorityType}",
+            _keycloakConfig.InternalAuthority != null ? "InternalAuthority" : "Authority");
+        _logger.LogInformation("Authority: {Authority}", _keycloakConfig.BackchannelAuthority);
         _logger.LogInformation("Realm: {Realm}", realm);
         _logger.LogInformation("Base URL: {BaseUrl}", baseUrl);
         _logger.LogInformation("Create User URL: {CreateUserUrl}", createUserUrl);
@@ -337,8 +339,8 @@ public class DeviceRegistrationService : IDeviceRegistrationService
         CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient();
-        var realm = _keycloakConfig.Authority.Split('/').Last();
-        var resetPasswordUrl = $"{_keycloakConfig.Authority.Replace($"/realms/{realm}", "")}/admin/realms/{realm}/users/{keycloakUserId}/reset-password";
+        var realm = _keycloakConfig.BackchannelAuthority.Split('/').Last();
+        var resetPasswordUrl = $"{_keycloakConfig.BackchannelAuthority.Replace($"/realms/{realm}", "")}/admin/realms/{realm}/users/{keycloakUserId}/reset-password";
 
         var resetPasswordRequest = new
         {
@@ -363,8 +365,8 @@ public class DeviceRegistrationService : IDeviceRegistrationService
         CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient();
-        var realm = _keycloakConfig.Authority.Split('/').Last();
-        var baseUrl = _keycloakConfig.Authority.Replace($"/realms/{realm}", "");
+        var realm = _keycloakConfig.BackchannelAuthority.Split('/').Last();
+        var baseUrl = _keycloakConfig.BackchannelAuthority.Replace($"/realms/{realm}", "");
         var updateUserUrl = $"{baseUrl}/admin/realms/{realm}/users/{keycloakUserId}";
 
         _logger.LogInformation("Clearing required actions for user {KeycloakUserId}", keycloakUserId);
@@ -405,7 +407,7 @@ public class DeviceRegistrationService : IDeviceRegistrationService
         CancellationToken cancellationToken)
     {
         var httpClient = _httpClientFactory.CreateClient();
-        var tokenUrl = $"{_keycloakConfig.Authority}/protocol/openid-connect/token";
+        var tokenUrl = $"{_keycloakConfig.BackchannelAuthority}/protocol/openid-connect/token";
 
         var tokenRequest = new FormUrlEncodedContent(new[]
         {

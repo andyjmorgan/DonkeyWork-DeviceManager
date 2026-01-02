@@ -114,8 +114,40 @@ fi
 mkdir -p "$INSTALL_PATH"
 echo -e "${GREEN}Installation directory created at: $INSTALL_PATH${NC}"
 
-# Step 4: Publish application
-echo -e "${YELLOW}[4/7] Publishing application (this may take a few minutes)...${NC}"
+# Step 4: Install OSQuery (if not already installed)
+echo -e "${YELLOW}[4/8] Checking OSQuery installation...${NC}"
+if ! command -v osqueryi &> /dev/null; then
+    echo -e "${YELLOW}OSQuery not found. Installing...${NC}"
+
+    # Detect Linux distribution
+    if [ -f /etc/debian_version ]; then
+        # Debian/Ubuntu
+        export OSQUERY_KEY=1484120AC4E9F8A1A577AEEE97A80C63C9D8B80B
+        apt-key adv --keyserver keyserver.ubuntu.com --recv-keys $OSQUERY_KEY
+        add-apt-repository 'deb [arch=amd64] https://pkg.osquery.io/deb deb main'
+        apt-get update
+        apt-get install -y osquery
+    elif [ -f /etc/redhat-release ]; then
+        # RHEL/CentOS/Fedora
+        curl -L https://pkg.osquery.io/rpm/GPG | tee /etc/pki/rpm-gpg/RPM-GPG-KEY-osquery
+        yum-config-manager --add-repo https://pkg.osquery.io/rpm/osquery-s3-rpm.repo
+        yum install -y osquery
+    else
+        echo -e "${RED}WARNING: Unsupported Linux distribution. Please install OSQuery manually.${NC}"
+        echo -e "${YELLOW}Visit: https://osquery.io/downloads/official${NC}"
+    fi
+
+    if command -v osqueryi &> /dev/null; then
+        echo -e "${GREEN}OSQuery installed successfully.${NC}"
+    else
+        echo -e "${YELLOW}WARNING: OSQuery installation failed. Query features will not work.${NC}"
+    fi
+else
+    echo -e "${GREEN}OSQuery is already installed.${NC}"
+fi
+
+# Step 5: Publish application
+echo -e "${YELLOW}[5/8] Publishing application (this may take a few minutes)...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_PATH="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PUBLISH_OUTPUT="$SCRIPT_DIR/publish"
@@ -134,15 +166,15 @@ dotnet publish "$PROJECT_PATH" \
 
 echo -e "${GREEN}Application published successfully.${NC}"
 
-# Step 5: Copy files to installation directory
-echo -e "${YELLOW}[5/7] Copying files to installation directory...${NC}"
+# Step 6: Copy files to installation directory
+echo -e "${YELLOW}[6/8] Copying files to installation directory...${NC}"
 cp -r "$PUBLISH_OUTPUT"/* "$INSTALL_PATH/"
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH"
 echo -e "${GREEN}Files copied successfully.${NC}"
 
-# Step 6: Create configuration file
-echo -e "${YELLOW}[6/7] Creating configuration file...${NC}"
+# Step 7: Create configuration file
+echo -e "${YELLOW}[7/8] Creating configuration file...${NC}"
 cat > "$INSTALL_PATH/appsettings.json" << EOF
 {
   "DeviceManagerConfiguration": {
@@ -160,8 +192,8 @@ EOF
 chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH/appsettings.json"
 echo -e "${GREEN}Configuration file created at: $INSTALL_PATH/appsettings.json${NC}"
 
-# Step 7: Create and start systemd service
-echo -e "${YELLOW}[7/7] Installing systemd service...${NC}"
+# Step 8: Create and start systemd service
+echo -e "${YELLOW}[8/8] Installing systemd service...${NC}"
 cat > "/etc/systemd/system/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=DonkeyWork Device Manager Client

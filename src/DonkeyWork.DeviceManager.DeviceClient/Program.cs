@@ -4,6 +4,7 @@ using DonkeyWork.DeviceManager.DeviceClient.Services.Hub;
 using DonkeyWork.DeviceManager.DeviceClient.Services.Authentication;
 using DonkeyWork.DeviceManager.DeviceClient.Services.Api;
 using DonkeyWork.DeviceManager.DeviceClient.Services.Device;
+using DonkeyWork.DeviceManager.DeviceClient.Services.OSQuery;
 using Microsoft.Extensions.Options;
 using Refit;
 using Serilog;
@@ -33,6 +34,12 @@ try
         .ValidateDataAnnotations()
         .ValidateOnStart();
 
+    builder.Services
+        .AddOptions<DonkeyWork.DeviceManager.DeviceClient.Configuration.OSQueryConfiguration>()
+        .BindConfiguration("OSQuery")
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
     // Register services
     builder.Services.AddHttpClient();
     builder.Services.AddSingleton<ITokenStorageService, TokenStorageService>();
@@ -59,6 +66,9 @@ try
         throw new PlatformNotSupportedException("System control operations are not supported on this platform");
     }
 
+    // Register OSQuery service
+    builder.Services.AddSingleton<IOSQueryService, OSQueryService>();
+
     // Register Refit API client with authorization
     builder.Services.AddRefitClient<IDeviceManagerApi>()
         .ConfigureHttpClient((serviceProvider, httpClient) =>
@@ -82,6 +92,15 @@ try
     builder.Services.AddSystemd();
 
     var host = builder.Build();
+
+    // Check OSQuery availability at startup
+    var osqueryService = host.Services.GetRequiredService<IOSQueryService>();
+    var isAvailable = await osqueryService.IsAvailableAsync();
+    if (!isAvailable)
+    {
+        Log.Warning("OSQuery is not available on this system. Query functionality will not work. Install from: https://osquery.io");
+    }
+
     await host.RunAsync();
 
     Log.Information("DonkeyWork Device Manager Client stopped cleanly");

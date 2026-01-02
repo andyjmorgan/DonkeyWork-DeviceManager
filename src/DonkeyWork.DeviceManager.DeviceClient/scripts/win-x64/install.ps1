@@ -71,8 +71,38 @@ if (Test-Path $InstallPath) {
 New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
 Write-Host "Installation directory created at: $InstallPath" -ForegroundColor Green
 
-# Step 3: Publish application
-Write-Host "[3/6] Publishing application (this may take a few minutes)..." -ForegroundColor Yellow
+# Step 3: Install OSQuery (if not already installed)
+Write-Host "[3/7] Checking OSQuery installation..." -ForegroundColor Yellow
+$osqueryPath = "C:\Program Files\osquery\osqueryi.exe"
+if (-not (Test-Path $osqueryPath)) {
+    Write-Host "OSQuery not found. Downloading installer..." -ForegroundColor Yellow
+
+    $osqueryInstallerUrl = "https://pkg.osquery.io/windows/osquery-5.11.0.msi"
+    $installerPath = Join-Path $env:TEMP "osquery-installer.msi"
+
+    try {
+        Invoke-WebRequest -Uri $osqueryInstallerUrl -OutFile $installerPath -UseBasicParsing
+        Write-Host "Installing OSQuery..." -ForegroundColor Yellow
+        Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /qn /norestart" -Wait -NoNewWindow
+        Remove-Item $installerPath -Force
+
+        if (Test-Path $osqueryPath) {
+            Write-Host "OSQuery installed successfully." -ForegroundColor Green
+        } else {
+            Write-Host "WARNING: OSQuery installation completed but executable not found. Query features may not work." -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "WARNING: Failed to install OSQuery: $_" -ForegroundColor Yellow
+        Write-Host "Please install manually from: https://osquery.io/downloads/official" -ForegroundColor Yellow
+    }
+}
+else {
+    Write-Host "OSQuery is already installed." -ForegroundColor Green
+}
+
+# Step 4: Publish application
+Write-Host "[4/7] Publishing application (this may take a few minutes)..." -ForegroundColor Yellow
 $projectPath = Join-Path $PSScriptRoot "..\..\"
 $publishOutput = Join-Path $PSScriptRoot "publish"
 
@@ -96,13 +126,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "Application published successfully." -ForegroundColor Green
 
-# Step 4: Copy files to installation directory
-Write-Host "[4/6] Copying files to installation directory..." -ForegroundColor Yellow
+# Step 5: Copy files to installation directory
+Write-Host "[5/7] Copying files to installation directory..." -ForegroundColor Yellow
 Copy-Item -Path "$publishOutput\*" -Destination $InstallPath -Recurse -Force
 Write-Host "Files copied successfully." -ForegroundColor Green
 
-# Step 5: Create configuration file
-Write-Host "[5/6] Creating configuration file..." -ForegroundColor Yellow
+# Step 6: Create configuration file
+Write-Host "[6/7] Creating configuration file..." -ForegroundColor Yellow
 $configPath = Join-Path $InstallPath "appsettings.json"
 $config = @"
 {
@@ -121,8 +151,8 @@ $config = @"
 Set-Content -Path $configPath -Value $config -Force
 Write-Host "Configuration file created at: $configPath" -ForegroundColor Green
 
-# Step 6: Install and start Windows Service
-Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
+# Step 7: Install and start Windows Service
+Write-Host "[7/7] Installing Windows Service..." -ForegroundColor Yellow
 $exePath = Join-Path $InstallPath "DonkeyWork.DeviceManager.DeviceClient.exe"
 
 # Create the service

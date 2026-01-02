@@ -61,6 +61,9 @@ app.MapProfileEndpoints();
 app.MapDeviceRegistrationEndpoints();
 app.MapDeviceEndpoints();
 app.MapDeviceInformationEndpoints();
+app.MapBuildingEndpoints();
+app.MapRoomEndpoints();
+app.MapProvisioningEndpoints();
 
 app.MapHubEndpoints();
 

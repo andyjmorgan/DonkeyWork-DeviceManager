@@ -17,12 +17,16 @@ public class WindowsSystemControlService : ISystemControlService
         _logger = logger;
     }
 
-    public Task RestartAsync()
+    public async Task RestartAsync()
     {
         _logger.LogInformation("Initiating Windows system restart via P/Invoke");
 
         try
         {
+            // Give time for logs to flush and responses to be sent
+            _logger.LogInformation("Waiting 3 seconds before restart to allow log flushing...");
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
             // Enable the SE_SHUTDOWN_NAME privilege
             EnableShutdownPrivilege();
 
@@ -40,16 +44,18 @@ public class WindowsSystemControlService : ISystemControlService
             _logger.LogError(ex, "Failed to restart Windows system");
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
-    public Task ShutdownAsync()
+    public async Task ShutdownAsync()
     {
         _logger.LogInformation("Initiating Windows system shutdown via P/Invoke");
 
         try
         {
+            // Give time for logs to flush and responses to be sent
+            _logger.LogInformation("Waiting 3 seconds before shutdown to allow log flushing...");
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
             // Enable the SE_SHUTDOWN_NAME privilege
             EnableShutdownPrivilege();
 
@@ -67,8 +73,6 @@ public class WindowsSystemControlService : ISystemControlService
             _logger.LogError(ex, "Failed to shutdown Windows system");
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
     private void EnableShutdownPrivilege()

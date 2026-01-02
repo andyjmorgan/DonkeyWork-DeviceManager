@@ -18,12 +18,16 @@ public class MacOSSystemControlService : ISystemControlService
         _logger = logger;
     }
 
-    public Task RestartAsync()
+    public async Task RestartAsync()
     {
         _logger.LogInformation("Initiating macOS system restart via P/Invoke");
 
         try
         {
+            // Give time for logs to flush and responses to be sent
+            _logger.LogInformation("Waiting 3 seconds before restart to allow log flushing...");
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
             // Call reboot() system call with RB_AUTOBOOT flag
             // This requires root privileges
             int result = reboot(RB_AUTOBOOT);
@@ -41,16 +45,18 @@ public class MacOSSystemControlService : ISystemControlService
             _logger.LogError(ex, "Failed to restart macOS system");
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
-    public Task ShutdownAsync()
+    public async Task ShutdownAsync()
     {
         _logger.LogInformation("Initiating macOS system shutdown via P/Invoke");
 
         try
         {
+            // Give time for logs to flush and responses to be sent
+            _logger.LogInformation("Waiting 3 seconds before shutdown to allow log flushing...");
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
             // Call reboot() system call with RB_HALT flag
             // This requires root privileges
             int result = reboot(RB_HALT);
@@ -68,8 +74,6 @@ public class MacOSSystemControlService : ISystemControlService
             _logger.LogError(ex, "Failed to shutdown macOS system");
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
     #region P/Invoke Declarations

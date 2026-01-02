@@ -122,9 +122,30 @@ if ! command -v osqueryi &> /dev/null; then
         apt-get install -y osquery
     elif [ -f /etc/redhat-release ]; then
         # RHEL/CentOS/Fedora
-        curl -L https://pkg.osquery.io/rpm/GPG | tee /etc/pki/rpm-gpg/RPM-GPG-KEY-osquery
-        yum-config-manager --add-repo https://pkg.osquery.io/rpm/osquery-s3-rpm.repo
-        yum install -y osquery
+        echo -e "${YELLOW}Installing OSQuery on RHEL/CentOS/Fedora...${NC}"
+
+        # Determine package manager (dnf or yum)
+        if command -v dnf &> /dev/null; then
+            PKG_MANAGER="dnf"
+        else
+            PKG_MANAGER="yum"
+        fi
+
+        # Install yum-utils if needed
+        if ! command -v yum-config-manager &> /dev/null; then
+            echo -e "${YELLOW}Installing yum-utils...${NC}"
+            $PKG_MANAGER install -y yum-utils 2>/dev/null || echo -e "${YELLOW}Could not install yum-utils${NC}"
+        fi
+
+        # Try to install OSQuery
+        if curl -L https://pkg.osquery.io/rpm/GPG 2>/dev/null | tee /etc/pki/rpm-gpg/RPM-GPG-KEY-osquery >/dev/null; then
+            if command -v yum-config-manager &> /dev/null; then
+                yum-config-manager --add-repo https://pkg.osquery.io/rpm/osquery-s3-rpm.repo 2>/dev/null || true
+            fi
+            $PKG_MANAGER install -y osquery 2>/dev/null || echo -e "${YELLOW}OSQuery installation via package manager failed${NC}"
+        else
+            echo -e "${YELLOW}Could not download OSQuery GPG key${NC}"
+        fi
     else
         echo -e "${RED}WARNING: Unsupported Linux distribution. Please install OSQuery manually.${NC}"
         echo -e "${YELLOW}Visit: https://osquery.io/downloads/official${NC}"

@@ -19,12 +19,16 @@ public class LinuxSystemControlService : ISystemControlService
         _logger = logger;
     }
 
-    public Task RestartAsync()
+    public async Task RestartAsync()
     {
         _logger.LogInformation("Initiating Linux system restart via P/Invoke");
 
         try
         {
+            // Give time for logs to flush and responses to be sent
+            _logger.LogInformation("Waiting 3 seconds before restart to allow log flushing...");
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
             // Call reboot() system call with RB_AUTOBOOT flag
             // This requires root privileges or CAP_SYS_BOOT capability
             int result = reboot(LINUX_REBOOT_CMD_RESTART);
@@ -42,16 +46,18 @@ public class LinuxSystemControlService : ISystemControlService
             _logger.LogError(ex, "Failed to restart Linux system");
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
-    public Task ShutdownAsync()
+    public async Task ShutdownAsync()
     {
         _logger.LogInformation("Initiating Linux system shutdown via P/Invoke");
 
         try
         {
+            // Give time for logs to flush and responses to be sent
+            _logger.LogInformation("Waiting 3 seconds before shutdown to allow log flushing...");
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
             // Call reboot() system call with RB_POWER_OFF flag
             // This requires root privileges or CAP_SYS_BOOT capability
             int result = reboot(LINUX_REBOOT_CMD_POWER_OFF);
@@ -69,8 +75,6 @@ public class LinuxSystemControlService : ISystemControlService
             _logger.LogError(ex, "Failed to shutdown Linux system");
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
     #region P/Invoke Declarations

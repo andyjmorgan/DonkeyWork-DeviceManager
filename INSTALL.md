@@ -11,13 +11,17 @@ The easiest way to install the device client is using our one-liner installer, w
 - Sets up logging
 - Installs OSQuery for hardware inventory
 
-### Linux (Ubuntu, Debian, RHEL, CentOS, Fedora)
+### Linux
 
 ```bash
 curl -sfL https://raw.githubusercontent.com/andyjmorgan/DonkeyWork-DeviceManager/main/install.sh | sudo sh -
 ```
 
-**Supported:** x86_64 (amd64)
+**Supported Distributions:**
+- Ubuntu 18.04+ / Debian 10+
+- Rocky Linux 8+ / RHEL 8+ / CentOS 8+ / Fedora 32+
+
+**Supported Architecture:** x86_64 (amd64)
 
 ### macOS
 
@@ -293,9 +297,10 @@ OSQuery is required for hardware inventory queries. If it's not installed:
 ## Requirements
 
 ### Linux
-- Ubuntu 18.04+ / Debian 10+ / RHEL 8+ / CentOS 8+ / Fedora 32+
+- **Ubuntu** 18.04+ / Debian 10+
+- **Rocky Linux** 8+ / RHEL 8+ / CentOS 8+ / Fedora 32+
 - x86_64 architecture
-- `curl` or `wget` for downloading
+- `curl` for downloading
 - `unzip` for extraction
 - `systemd` for service management
 - Root access (sudo)

@@ -1,12 +1,15 @@
-using System.Diagnostics;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 
 namespace DonkeyWork.DeviceManager.DeviceClient.Services.Device;
 
 /// <summary>
-/// Linux implementation of system control operations.
-/// Uses systemctl for modern Linux systems with systemd.
+/// Linux implementation of system control operations using P/Invoke.
+/// Uses the reboot() system call from libc.
 /// </summary>
+[SupportedOSPlatform("linux")]
 public class LinuxSystemControlService : ISystemControlService
 {
     private readonly ILogger<LinuxSystemControlService> _logger;
@@ -18,27 +21,21 @@ public class LinuxSystemControlService : ISystemControlService
 
     public Task RestartAsync()
     {
-        _logger.LogInformation("Initiating Linux system restart");
+        _logger.LogInformation("Initiating Linux system restart via P/Invoke");
 
         try
         {
-            // systemctl reboot - standard way to restart on systemd-based Linux
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "/usr/bin/systemctl",
-                Arguments = "reboot",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
+            // Call reboot() system call with RB_AUTOBOOT flag
+            // This requires root privileges or CAP_SYS_BOOT capability
+            int result = reboot(LINUX_REBOOT_CMD_RESTART);
 
-            var process = Process.Start(startInfo);
-            if (process != null)
+            if (result != 0)
             {
-                process.WaitForExit(5000);
-                _logger.LogInformation("Linux restart command executed successfully (exit code: {ExitCode})", process.ExitCode);
+                int errno = Marshal.GetLastPInvokeError();
+                throw new InvalidOperationException($"reboot() failed with errno: {errno}");
             }
+
+            _logger.LogInformation("Linux restart initiated successfully");
         }
         catch (Exception ex)
         {
@@ -51,27 +48,21 @@ public class LinuxSystemControlService : ISystemControlService
 
     public Task ShutdownAsync()
     {
-        _logger.LogInformation("Initiating Linux system shutdown");
+        _logger.LogInformation("Initiating Linux system shutdown via P/Invoke");
 
         try
         {
-            // systemctl poweroff - standard way to shutdown on systemd-based Linux
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "/usr/bin/systemctl",
-                Arguments = "poweroff",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
+            // Call reboot() system call with RB_POWER_OFF flag
+            // This requires root privileges or CAP_SYS_BOOT capability
+            int result = reboot(LINUX_REBOOT_CMD_POWER_OFF);
 
-            var process = Process.Start(startInfo);
-            if (process != null)
+            if (result != 0)
             {
-                process.WaitForExit(5000);
-                _logger.LogInformation("Linux shutdown command executed successfully (exit code: {ExitCode})", process.ExitCode);
+                int errno = Marshal.GetLastPInvokeError();
+                throw new InvalidOperationException($"reboot() failed with errno: {errno}");
             }
+
+            _logger.LogInformation("Linux shutdown initiated successfully");
         }
         catch (Exception ex)
         {
@@ -81,4 +72,16 @@ public class LinuxSystemControlService : ISystemControlService
 
         return Task.CompletedTask;
     }
+
+    #region P/Invoke Declarations
+
+    // reboot() system call - see man 2 reboot
+    [DllImport("libc", SetLastError = true)]
+    private static extern int reboot(uint cmd);
+
+    // Linux reboot commands from <linux/reboot.h>
+    private const uint LINUX_REBOOT_CMD_RESTART = 0x01234567;   // Restart system
+    private const uint LINUX_REBOOT_CMD_POWER_OFF = 0x4321FEDC; // Power off system
+
+    #endregion
 }

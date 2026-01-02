@@ -1,5 +1,6 @@
 using DonkeyWork.DeviceManager.DeviceClient.Configuration;
 using DonkeyWork.DeviceManager.DeviceClient.Models;
+using DonkeyWork.DeviceManager.DeviceClient.Services.Device;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 
@@ -15,6 +16,7 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
 {
     private readonly DeviceManagerConfiguration _config;
     private readonly ILogger<DeviceHubConnectionService> _logger;
+    private readonly ISystemControlService _systemControl;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
     private HubConnection? _hubConnection;
@@ -22,10 +24,12 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
 
     public DeviceHubConnectionService(
         IOptions<DeviceManagerConfiguration> config,
-        ILogger<DeviceHubConnectionService> logger)
+        ILogger<DeviceHubConnectionService> logger,
+        ISystemControlService systemControl)
     {
         _config = config.Value;
         _logger = logger;
+        _systemControl = systemControl;
 
         _logger.LogDebug("Device hub connection service initialized with API base URL: {ApiBaseUrl}", _config.ApiBaseUrl);
     }
@@ -260,9 +264,12 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
 
                 _logger.LogInformation("Acknowledged shutdown command {CommandId}", command.CommandId);
 
-                // TODO: Implement actual shutdown logic
-                // For now, just log it
-                _logger.LogWarning("Shutdown command received but not implemented yet");
+                // Give a moment for the acknowledgment to be sent before shutting down
+                await Task.Delay(500);
+
+                // Execute shutdown
+                _logger.LogWarning("Initiating system shutdown");
+                await _systemControl.ShutdownAsync();
             }
             catch (Exception ex)
             {
@@ -294,9 +301,12 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
 
                 _logger.LogInformation("Acknowledged restart command {CommandId}", command.CommandId);
 
-                // TODO: Implement actual restart logic
-                // For now, just log it
-                _logger.LogWarning("Restart command received but not implemented yet");
+                // Give a moment for the acknowledgment to be sent before restarting
+                await Task.Delay(500);
+
+                // Execute restart
+                _logger.LogWarning("Initiating system restart");
+                await _systemControl.RestartAsync();
             }
             catch (Exception ex)
             {

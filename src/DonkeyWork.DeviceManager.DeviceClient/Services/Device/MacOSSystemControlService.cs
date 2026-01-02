@@ -1,12 +1,14 @@
-using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 
 namespace DonkeyWork.DeviceManager.DeviceClient.Services.Device;
 
 /// <summary>
-/// macOS implementation of system control operations.
-/// Uses shutdown command available on macOS.
+/// macOS implementation of system control operations using P/Invoke.
+/// Uses the reboot() system call from libc (Darwin).
 /// </summary>
+[SupportedOSPlatform("macos")]
 public class MacOSSystemControlService : ISystemControlService
 {
     private readonly ILogger<MacOSSystemControlService> _logger;
@@ -18,28 +20,21 @@ public class MacOSSystemControlService : ISystemControlService
 
     public Task RestartAsync()
     {
-        _logger.LogInformation("Initiating macOS system restart");
+        _logger.LogInformation("Initiating macOS system restart via P/Invoke");
 
         try
         {
-            // shutdown -r now - restart immediately
-            // Alternative: osascript -e 'tell app "System Events" to restart'
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "/sbin/shutdown",
-                Arguments = "-r now",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
+            // Call reboot() system call with RB_AUTOBOOT flag
+            // This requires root privileges
+            int result = reboot(RB_AUTOBOOT);
 
-            var process = Process.Start(startInfo);
-            if (process != null)
+            if (result != 0)
             {
-                process.WaitForExit(5000);
-                _logger.LogInformation("macOS restart command executed successfully (exit code: {ExitCode})", process.ExitCode);
+                int errno = Marshal.GetLastPInvokeError();
+                throw new InvalidOperationException($"reboot() failed with errno: {errno}");
             }
+
+            _logger.LogInformation("macOS restart initiated successfully");
         }
         catch (Exception ex)
         {
@@ -52,28 +47,21 @@ public class MacOSSystemControlService : ISystemControlService
 
     public Task ShutdownAsync()
     {
-        _logger.LogInformation("Initiating macOS system shutdown");
+        _logger.LogInformation("Initiating macOS system shutdown via P/Invoke");
 
         try
         {
-            // shutdown -h now - halt (shutdown) immediately
-            // Alternative: osascript -e 'tell app "System Events" to shut down'
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "/sbin/shutdown",
-                Arguments = "-h now",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
+            // Call reboot() system call with RB_HALT flag
+            // This requires root privileges
+            int result = reboot(RB_HALT);
 
-            var process = Process.Start(startInfo);
-            if (process != null)
+            if (result != 0)
             {
-                process.WaitForExit(5000);
-                _logger.LogInformation("macOS shutdown command executed successfully (exit code: {ExitCode})", process.ExitCode);
+                int errno = Marshal.GetLastPInvokeError();
+                throw new InvalidOperationException($"reboot() failed with errno: {errno}");
             }
+
+            _logger.LogInformation("macOS shutdown initiated successfully");
         }
         catch (Exception ex)
         {
@@ -83,4 +71,17 @@ public class MacOSSystemControlService : ISystemControlService
 
         return Task.CompletedTask;
     }
+
+    #region P/Invoke Declarations
+
+    // reboot() system call - see man 2 reboot
+    [DllImport("libSystem.dylib", SetLastError = true)]
+    private static extern int reboot(int howto);
+
+    // macOS/BSD reboot flags from <sys/reboot.h>
+    private const int RB_AUTOBOOT = 0;    // Restart the system
+    private const int RB_HALT = 8;        // Halt and power down the system
+    private const int RB_POWEROFF = 0x2000; // Power off the system (alternative)
+
+    #endregion
 }

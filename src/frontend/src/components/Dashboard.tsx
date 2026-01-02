@@ -14,6 +14,7 @@ import { SplitButton } from 'primereact/splitbutton';
 import { lookupDeviceRegistration, completeDeviceRegistration } from '../services/deviceRegistrationService';
 import { getDevices, updateDeviceDescription, deleteDevice } from '../services/deviceService';
 import { userHubService } from '../services/userHubService';
+import OSIcon from './OSIcon';
 import type { DeviceRegistrationLookupDto, BuildingDto, RoomDto } from '../types/deviceRegistration';
 import type { DeviceResponse, PaginatedResponse } from '../types/device';
 import type { DeviceStatusNotification } from '../types/notifications';
@@ -421,99 +422,202 @@ function Dashboard() {
             </div>
           ) : (
             <>
-              <DataTable
-                value={devices?.items || []}
-                responsiveLayout="scroll"
-                stripedRows
-                emptyMessage="No devices found"
-              >
-                <Column
-                  field="online"
-                  header="Status"
-                  body={(rowData: DeviceResponse) => (
-                    <Tag
-                      value={rowData.online ? 'Online' : 'Offline'}
-                      severity={rowData.online ? 'success' : 'danger'}
-                      icon={rowData.online ? 'pi pi-check' : 'pi pi-times'}
-                    />
-                  )}
-                  sortable
-                  style={{ width: '120px' }}
-                />
-                <Column field="name" header="Device Name" sortable />
-                <Column
-                  field="operatingSystem"
-                  header="Device Type"
-                  body={(rowData: DeviceResponse) => rowData.operatingSystem || '-'}
-                  sortable
-                  style={{ width: '150px' }}
-                />
-                <Column
-                  field="room.name"
-                  header="Location"
-                  body={(rowData: DeviceResponse) => `${rowData.room.building.name} - ${rowData.room.name}`}
-                  sortable
-                />
-                <Column
-                  field="description"
-                  header="Description"
-                  body={(rowData: DeviceResponse) => rowData.description || '-'}
-                />
-                <Column
-                  header="Actions"
-                  body={(rowData: DeviceResponse) => {
-                    const deviceMenuItems = [
-                      {
-                        label: 'Edit Description',
-                        icon: 'pi pi-pencil',
-                        command: () => handleEditDescription(rowData),
-                      },
-                      {
-                        separator: true,
-                      },
-                      {
-                        label: 'Ping',
-                        icon: 'pi pi-wifi',
-                        command: () => handlePingDevice(rowData.id, rowData.name),
-                        disabled: !rowData.online,
-                      },
-                      {
-                        label: 'Restart',
-                        icon: 'pi pi-refresh',
-                        command: () => handleRestartDevice(rowData.id, rowData.name),
-                        disabled: !rowData.online,
-                      },
-                      {
-                        label: 'Shutdown',
-                        icon: 'pi pi-power-off',
-                        command: () => handleShutdownDevice(rowData.id, rowData.name),
-                        disabled: !rowData.online,
-                      },
-                      {
-                        separator: true,
-                      },
-                      {
-                        label: 'Delete',
-                        icon: 'pi pi-trash',
-                        command: () => handleDeleteDevice(rowData),
-                        className: 'p-menuitem-danger',
-                      },
-                    ];
-
-                    return (
-                      <SplitButton
-                        label="Manage"
-                        icon="pi pi-cog"
-                        model={deviceMenuItems}
-                        onClick={() => handleEditDescription(rowData)}
-                        className="p-button-sm"
-                        size="small"
+              {/* Desktop Table View */}
+              <div className="devices-table-view">
+                <DataTable
+                  value={devices?.items || []}
+                  responsiveLayout="scroll"
+                  stripedRows
+                  emptyMessage="No devices found"
+                >
+                  <Column
+                    field="online"
+                    header="Status"
+                    body={(rowData: DeviceResponse) => (
+                      <Tag
+                        value={rowData.online ? 'Online' : 'Offline'}
+                        severity={rowData.online ? 'success' : 'danger'}
+                        icon={rowData.online ? 'pi pi-check' : 'pi pi-times'}
                       />
-                    );
-                  }}
-                  style={{ width: '160px' }}
-                />
-              </DataTable>
+                    )}
+                    sortable
+                    style={{ width: '120px' }}
+                  />
+                  <Column field="name" header="Device Name" sortable />
+                  <Column
+                    field="operatingSystem"
+                    header="Device Type"
+                    body={(rowData: DeviceResponse) => (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <OSIcon operatingSystem={rowData.operatingSystem} size={18} />
+                        <span>{rowData.operatingSystem || '-'}</span>
+                      </div>
+                    )}
+                    sortable
+                    style={{ width: '180px' }}
+                  />
+                  <Column
+                    field="room.name"
+                    header="Location"
+                    body={(rowData: DeviceResponse) => `${rowData.room.building.name} - ${rowData.room.name}`}
+                    sortable
+                  />
+                  <Column
+                    field="description"
+                    header="Description"
+                    body={(rowData: DeviceResponse) => rowData.description || '-'}
+                  />
+                  <Column
+                    header="Actions"
+                    body={(rowData: DeviceResponse) => {
+                      const deviceMenuItems = [
+                        {
+                          label: 'Edit Description',
+                          icon: 'pi pi-pencil',
+                          command: () => handleEditDescription(rowData),
+                        },
+                        {
+                          separator: true,
+                        },
+                        {
+                          label: 'Ping',
+                          icon: 'pi pi-wifi',
+                          command: () => handlePingDevice(rowData.id, rowData.name),
+                          disabled: !rowData.online,
+                        },
+                        {
+                          label: 'Restart',
+                          icon: 'pi pi-refresh',
+                          command: () => handleRestartDevice(rowData.id, rowData.name),
+                          disabled: !rowData.online,
+                        },
+                        {
+                          label: 'Shutdown',
+                          icon: 'pi pi-power-off',
+                          command: () => handleShutdownDevice(rowData.id, rowData.name),
+                          disabled: !rowData.online,
+                        },
+                        {
+                          separator: true,
+                        },
+                        {
+                          label: 'Delete',
+                          icon: 'pi pi-trash',
+                          command: () => handleDeleteDevice(rowData),
+                          className: 'p-menuitem-danger',
+                        },
+                      ];
+
+                      return (
+                        <SplitButton
+                          label="Manage"
+                          icon="pi pi-cog"
+                          model={deviceMenuItems}
+                          onClick={() => handleEditDescription(rowData)}
+                          className="p-button-sm"
+                          size="small"
+                        />
+                      );
+                    }}
+                    style={{ width: '160px' }}
+                  />
+                </DataTable>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="devices-card-view">
+                {devices?.items && devices.items.length > 0 ? (
+                  <div className="device-cards">
+                    {devices.items.map((device) => {
+                      const deviceMenuItems = [
+                        {
+                          label: 'Edit Description',
+                          icon: 'pi pi-pencil',
+                          command: () => handleEditDescription(device),
+                        },
+                        {
+                          separator: true,
+                        },
+                        {
+                          label: 'Ping',
+                          icon: 'pi pi-wifi',
+                          command: () => handlePingDevice(device.id, device.name),
+                          disabled: !device.online,
+                        },
+                        {
+                          label: 'Restart',
+                          icon: 'pi pi-refresh',
+                          command: () => handleRestartDevice(device.id, device.name),
+                          disabled: !device.online,
+                        },
+                        {
+                          label: 'Shutdown',
+                          icon: 'pi pi-power-off',
+                          command: () => handleShutdownDevice(device.id, device.name),
+                          disabled: !device.online,
+                        },
+                        {
+                          separator: true,
+                        },
+                        {
+                          label: 'Delete',
+                          icon: 'pi pi-trash',
+                          command: () => handleDeleteDevice(device),
+                          className: 'p-menuitem-danger',
+                        },
+                      ];
+
+                      return (
+                        <Card key={device.id} className="device-card">
+                          <div className="device-card-header">
+                            <div className="device-card-icon">
+                              <OSIcon operatingSystem={device.operatingSystem} size={32} />
+                            </div>
+                            <div className="device-card-title">
+                              <h4>{device.name}</h4>
+                              <Tag
+                                value={device.online ? 'Online' : 'Offline'}
+                                severity={device.online ? 'success' : 'danger'}
+                                icon={device.online ? 'pi pi-check' : 'pi pi-times'}
+                              />
+                            </div>
+                            <SplitButton
+                              icon="pi pi-cog"
+                              model={deviceMenuItems}
+                              onClick={() => handleEditDescription(device)}
+                              className="p-button-sm p-button-text"
+                              size="small"
+                            />
+                          </div>
+                          <div className="device-card-body">
+                            <div className="device-card-info">
+                              <span className="info-label">Type:</span>
+                              <span className="info-value">{device.operatingSystem || '-'}</span>
+                            </div>
+                            <div className="device-card-info">
+                              <span className="info-label">Location:</span>
+                              <span className="info-value">
+                                {device.room.building.name} - {device.room.name}
+                              </span>
+                            </div>
+                            {device.description && (
+                              <div className="device-card-info">
+                                <span className="info-label">Description:</span>
+                                <span className="info-value">{device.description}</span>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ textAlign: 'center', color: 'var(--text-color-secondary)' }}>
+                    No devices found
+                  </p>
+                )}
+              </div>
+
               {devices && devices.totalPages > 1 && (
                 <Paginator
                   first={(currentPage - 1) * 10}

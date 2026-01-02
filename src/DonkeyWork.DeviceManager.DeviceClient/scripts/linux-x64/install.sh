@@ -98,29 +98,31 @@ else
     echo -e "${YELLOW}User '$SERVICE_USER' already exists.${NC}"
 fi
 
-# Step 3: Backup device tokens (if upgrading)
-echo -e "${YELLOW}[3/8] Backing up device tokens (if present)...${NC}"
+# Step 3: Prepare installation directory (preserve device tokens)
+echo -e "${YELLOW}[3/8] Preparing installation directory...${NC}"
 TOKENS_FILE="$INSTALL_PATH/device-tokens.json"
-TOKENS_BACKUP=""
-if [ -f "$TOKENS_FILE" ]; then
-    TOKENS_BACKUP=$(mktemp)
-    cp "$TOKENS_FILE" "$TOKENS_BACKUP"
-    echo -e "${GREEN}Device tokens backed up to temporary location${NC}"
-else
-    echo -e "${YELLOW}No existing device tokens found (fresh install)${NC}"
-fi
 
-# Step 4: Create installation directory
-echo -e "${YELLOW}[4/8] Creating installation directory...${NC}"
 if [ -d "$INSTALL_PATH" ]; then
-    echo -e "${YELLOW}Installation directory already exists. Removing old files...${NC}"
-    rm -rf "$INSTALL_PATH"
-fi
-mkdir -p "$INSTALL_PATH"
-echo -e "${GREEN}Installation directory created at: $INSTALL_PATH${NC}"
+    echo -e "${YELLOW}Installation directory exists. Upgrading in place (preserving device tokens)...${NC}"
 
-# Step 5: Install OSQuery (if not already installed)
-echo -e "${YELLOW}[5/8] Checking OSQuery installation...${NC}"
+    # Remove old files but NEVER delete device-tokens.json
+    find "$INSTALL_PATH" -mindepth 1 ! -name 'device-tokens.json' ! -name 'DeviceClient.log*' -delete 2>/dev/null || {
+        # Fallback: remove specific known files/dirs if find fails
+        rm -rf "$INSTALL_PATH/scripts" 2>/dev/null || true
+        rm -f "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient" 2>/dev/null || true
+        rm -f "$INSTALL_PATH/appsettings.json" 2>/dev/null || true
+        rm -f "$INSTALL_PATH"/*.dll 2>/dev/null || true
+    }
+
+    echo -e "${GREEN}Old files removed (device tokens preserved)${NC}"
+else
+    echo -e "${YELLOW}Fresh installation - creating directory...${NC}"
+    mkdir -p "$INSTALL_PATH"
+    echo -e "${GREEN}Installation directory created at: $INSTALL_PATH${NC}"
+fi
+
+# Step 4: Install OSQuery (if not already installed)
+echo -e "${YELLOW}[4/7] Checking OSQuery installation...${NC}"
 if ! command -v osqueryi &> /dev/null; then
     echo -e "${YELLOW}OSQuery not found. Installing...${NC}"
 
@@ -172,37 +174,34 @@ else
     echo -e "${GREEN}OSQuery is already installed.${NC}"
 fi
 
-# Step 6: Copy application files to installation directory
-echo -e "${YELLOW}[6/8] Copying application files to installation directory...${NC}"
+# Step 5: Copy application files to installation directory
+echo -e "${YELLOW}[5/7] Copying application files to installation directory...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Copy the pre-built binary and supporting files (excluding scripts directory)
-# Note: We use rsync if available to exclude device-tokens.json from source package
-if command -v rsync &> /dev/null; then
-    rsync -a --exclude='scripts' --exclude='device-tokens.json' "$PACKAGE_DIR"/ "$INSTALL_PATH/"
-else
-    cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
-    rm -rf "$INSTALL_PATH/scripts"
-    rm -f "$INSTALL_PATH/device-tokens.json"  # Remove if accidentally copied from package
-fi
+# Copy the pre-built binary and supporting files
+# IMPORTANT: Never overwrite device-tokens.json - it contains device credentials
+for item in "$PACKAGE_DIR"/*; do
+    filename=$(basename "$item")
+
+    # Skip scripts directory and device-tokens.json
+    if [ "$filename" = "scripts" ]; then
+        continue
+    fi
+    if [ "$filename" = "device-tokens.json" ]; then
+        echo -e "${YELLOW}Skipping device-tokens.json from package (preserving existing)${NC}"
+        continue
+    fi
+
+    # Copy everything else
+    cp -rf "$item" "$INSTALL_PATH/"
+done
+
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 
-# Restore device tokens if they were backed up
-if [ -n "$TOKENS_BACKUP" ] && [ -f "$TOKENS_BACKUP" ]; then
-    if cp "$TOKENS_BACKUP" "$TOKENS_FILE"; then
-        # Verify the file was restored and has content
-        if [ -f "$TOKENS_FILE" ] && [ -s "$TOKENS_FILE" ]; then
-            rm "$TOKENS_BACKUP"
-            echo -e "${GREEN}Device tokens restored from backup${NC}"
-        else
-            echo -e "${YELLOW}WARNING: Device tokens restore verification failed. Backup kept at: $TOKENS_BACKUP${NC}"
-            echo -e "${YELLOW}Manual intervention required: cp $TOKENS_BACKUP $TOKENS_FILE${NC}"
-        fi
-    else
-        echo -e "${RED}ERROR: Failed to restore device tokens. Backup preserved at: $TOKENS_BACKUP${NC}"
-        echo -e "${RED}Manual intervention required: cp $TOKENS_BACKUP $TOKENS_FILE${NC}"
-    fi
+# Verify device tokens were preserved if this is an upgrade
+if [ -f "$TOKENS_FILE" ]; then
+    echo -e "${GREEN}Device tokens preserved during upgrade${NC}"
 fi
 
 # Grant CAP_SYS_BOOT capability for system restart/shutdown
@@ -226,20 +225,20 @@ fi
 
 # Update API URL in appsettings.json if specified
 if [ "$API_BASE_URL" != "https://devicemanager.donkeywork.dev" ]; then
-    echo -e "${YELLOW}[7/8] Updating API URL in configuration...${NC}"
+    echo -e "${YELLOW}[6/7] Updating API URL in configuration...${NC}"
     sed -i "s|http://devicemanager.donkeywork.dev|$API_BASE_URL|g" "$INSTALL_PATH/appsettings.json"
     sed -i "s|https://devicemanager.donkeywork.dev|$API_BASE_URL|g" "$INSTALL_PATH/appsettings.json"
     echo -e "${GREEN}API URL updated to: $API_BASE_URL${NC}"
 else
-    echo -e "${YELLOW}[7/8] Configuration file already present${NC}"
+    echo -e "${YELLOW}[6/7] Configuration file already present${NC}"
     echo -e "${GREEN}Using default API URL: $API_BASE_URL${NC}"
 fi
 
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH"
 echo -e "${GREEN}Files copied successfully.${NC}"
 
-# Step 8: Create and start systemd service
-echo -e "${YELLOW}[8/8] Installing systemd service...${NC}"
+# Step 7: Create and start systemd service
+echo -e "${YELLOW}[7/7] Installing systemd service...${NC}"
 cat > "/etc/systemd/system/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=DonkeyWork Device Manager Client

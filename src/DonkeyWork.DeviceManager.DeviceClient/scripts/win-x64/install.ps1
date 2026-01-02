@@ -62,29 +62,27 @@ if ($existingService) {
     Write-Host "Existing service removed." -ForegroundColor Green
 }
 
-# Step 2: Backup device tokens (if upgrading)
-Write-Host "[2/7] Backing up device tokens (if present)..." -ForegroundColor Yellow
+# Step 2: Prepare installation directory (preserve device tokens)
+Write-Host "[2/6] Preparing installation directory..." -ForegroundColor Yellow
 $tokensFile = Join-Path $InstallPath "device-tokens.json"
-$tokensBackup = $null
-if (Test-Path $tokensFile) {
-    $tokensBackup = New-TemporaryFile
-    Copy-Item -Path $tokensFile -Destination $tokensBackup.FullName -Force
-    Write-Host "Device tokens backed up to temporary location" -ForegroundColor Green
-} else {
-    Write-Host "No existing device tokens found (fresh install)" -ForegroundColor Yellow
-}
 
-# Step 3: Create installation directory
-Write-Host "[3/7] Creating installation directory..." -ForegroundColor Yellow
 if (Test-Path $InstallPath) {
-    Write-Host "Installation directory already exists. Removing old files..." -ForegroundColor Yellow
-    Remove-Item -Path $InstallPath -Recurse -Force
-}
-New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
-Write-Host "Installation directory created at: $InstallPath" -ForegroundColor Green
+    Write-Host "Installation directory exists. Upgrading in place (preserving device tokens)..." -ForegroundColor Yellow
 
-# Step 4: Install OSQuery (if not already installed)
-Write-Host "[4/7] Checking OSQuery installation..." -ForegroundColor Yellow
+    # Remove old files but NEVER delete device-tokens.json
+    Get-ChildItem -Path $InstallPath -Recurse | Where-Object {
+        $_.Name -ne "device-tokens.json" -and $_.Name -notlike "DeviceClient.log*"
+    } | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+
+    Write-Host "Old files removed (device tokens preserved)" -ForegroundColor Green
+} else {
+    Write-Host "Fresh installation - creating directory..." -ForegroundColor Yellow
+    New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
+    Write-Host "Installation directory created at: $InstallPath" -ForegroundColor Green
+}
+
+# Step 3: Install OSQuery (if not already installed)
+Write-Host "[3/6] Checking OSQuery installation..." -ForegroundColor Yellow
 $osqueryPath = "C:\Program Files\osquery\osqueryi.exe"
 if (-not (Test-Path $osqueryPath)) {
     Write-Host "OSQuery not found. Downloading installer..." -ForegroundColor Yellow
@@ -113,37 +111,29 @@ else {
     Write-Host "OSQuery is already installed." -ForegroundColor Green
 }
 
-# Step 5: Copy application files to installation directory
-Write-Host "[5/7] Copying application files to installation directory..." -ForegroundColor Yellow
+# Step 4: Copy application files to installation directory
+Write-Host "[4/6] Copying application files to installation directory..." -ForegroundColor Yellow
 $packageDir = Split-Path -Parent $PSScriptRoot
 
-# Copy the pre-built binary and supporting files (excluding scripts directory and device-tokens.json)
-Copy-Item -Path "$packageDir\*" -Destination $InstallPath -Recurse -Force -Exclude "scripts","device-tokens.json"
-
-# Restore device tokens if they were backed up
-if ($tokensBackup -and (Test-Path $tokensBackup.FullName)) {
-    try {
-        Copy-Item -Path $tokensBackup.FullName -Destination $tokensFile -Force -ErrorAction Stop
-
-        # Verify the file was restored and has content
-        if ((Test-Path $tokensFile) -and ((Get-Item $tokensFile).Length -gt 0)) {
-            Remove-Item -Path $tokensBackup.FullName -Force
-            Write-Host "Device tokens restored from backup" -ForegroundColor Green
-        } else {
-            Write-Host "WARNING: Device tokens restore verification failed. Backup kept at: $($tokensBackup.FullName)" -ForegroundColor Yellow
-            Write-Host "Manual intervention required: copy $($tokensBackup.FullName) to $tokensFile" -ForegroundColor Yellow
-        }
+# Copy files one by one, skipping device-tokens.json
+Get-ChildItem -Path $packageDir | Where-Object {
+    $_.Name -ne "scripts" -and $_.Name -ne "device-tokens.json"
+} | ForEach-Object {
+    if ($_.Name -eq "device-tokens.json") {
+        Write-Host "Skipping device-tokens.json from package (preserving existing)" -ForegroundColor Yellow
+    } else {
+        Copy-Item -Path $_.FullName -Destination $InstallPath -Recurse -Force
     }
-    catch {
-        Write-Host "ERROR: Failed to restore device tokens. Backup preserved at: $($tokensBackup.FullName)" -ForegroundColor Red
-        Write-Host "Manual intervention required: copy $($tokensBackup.FullName) to $tokensFile" -ForegroundColor Red
-        Write-Host "Error details: $_" -ForegroundColor Red
-    }
+}
+
+# Verify device tokens were preserved if this is an upgrade
+if (Test-Path $tokensFile) {
+    Write-Host "Device tokens preserved during upgrade" -ForegroundColor Green
 }
 
 # Update API URL in appsettings.json if specified
 if ($ApiBaseUrl -ne "https://devicemanager.donkeywork.dev") {
-    Write-Host "[6/7] Updating API URL in configuration..." -ForegroundColor Yellow
+    Write-Host "[5/6] Updating API URL in configuration..." -ForegroundColor Yellow
     $configPath = Join-Path $InstallPath "appsettings.json"
     $config = Get-Content $configPath -Raw
     $config = $config -replace 'http://devicemanager.donkeywork.dev', $ApiBaseUrl
@@ -151,14 +141,14 @@ if ($ApiBaseUrl -ne "https://devicemanager.donkeywork.dev") {
     Set-Content -Path $configPath -Value $config -Force
     Write-Host "API URL updated to: $ApiBaseUrl" -ForegroundColor Green
 } else {
-    Write-Host "[6/7] Configuration file already present" -ForegroundColor Yellow
+    Write-Host "[5/6] Configuration file already present" -ForegroundColor Yellow
     Write-Host "Using default API URL: $ApiBaseUrl" -ForegroundColor Green
 }
 
 Write-Host "Files copied successfully." -ForegroundColor Green
 
-# Step 7: Install and start Windows Service
-Write-Host "[7/7] Installing Windows Service..." -ForegroundColor Yellow
+# Step 6: Install and start Windows Service
+Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
 $exePath = Join-Path $InstallPath "DonkeyWork.DeviceManager.DeviceClient.exe"
 
 # Create the service

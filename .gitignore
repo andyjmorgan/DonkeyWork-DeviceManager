@@ -418,6 +418,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+.vite
+.DS_Store
 
 appsettings.Development.json
 docker-compose.yml
+device-tokens.json

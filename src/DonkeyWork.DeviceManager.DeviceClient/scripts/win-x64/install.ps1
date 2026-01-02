@@ -101,38 +101,16 @@ else {
     Write-Host "OSQuery is already installed." -ForegroundColor Green
 }
 
-# Step 4: Publish application
-Write-Host "[4/7] Publishing application (this may take a few minutes)..." -ForegroundColor Yellow
-$projectPath = Join-Path $PSScriptRoot "..\..\"
-$publishOutput = Join-Path $PSScriptRoot "publish"
+# Step 4: Copy application files to installation directory
+Write-Host "[4/6] Copying application files to installation directory..." -ForegroundColor Yellow
+$packageDir = Split-Path -Parent $PSScriptRoot
 
-# Clean previous publish output
-if (Test-Path $publishOutput) {
-    Remove-Item -Path $publishOutput -Recurse -Force
-}
-
-# Publish as self-contained for win-x64
-dotnet publish $projectPath `
-    --configuration Release `
-    --runtime win-x64 `
-    --self-contained true `
-    --output $publishOutput `
-    -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Failed to publish application" -ForegroundColor Red
-    exit 1
-}
-Write-Host "Application published successfully." -ForegroundColor Green
-
-# Step 5: Copy files to installation directory
-Write-Host "[5/7] Copying files to installation directory..." -ForegroundColor Yellow
-Copy-Item -Path "$publishOutput\*" -Destination $InstallPath -Recurse -Force
+# Copy the pre-built binary and supporting files (excluding scripts directory)
+Copy-Item -Path "$packageDir\*" -Destination $InstallPath -Recurse -Force -Exclude "scripts"
 Write-Host "Files copied successfully." -ForegroundColor Green
 
-# Step 6: Create configuration file
-Write-Host "[6/7] Creating configuration file..." -ForegroundColor Yellow
+# Step 5: Create configuration file
+Write-Host "[5/6] Creating configuration file..." -ForegroundColor Yellow
 $configPath = Join-Path $InstallPath "appsettings.json"
 $config = @"
 {
@@ -151,8 +129,8 @@ $config = @"
 Set-Content -Path $configPath -Value $config -Force
 Write-Host "Configuration file created at: $configPath" -ForegroundColor Green
 
-# Step 7: Install and start Windows Service
-Write-Host "[7/7] Installing Windows Service..." -ForegroundColor Yellow
+# Step 6: Install and start Windows Service
+Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
 $exePath = Join-Path $InstallPath "DonkeyWork.DeviceManager.DeviceClient.exe"
 
 # Create the service

@@ -146,35 +146,20 @@ else
     echo -e "${GREEN}OSQuery is already installed.${NC}"
 fi
 
-# Step 5: Publish application
-echo -e "${YELLOW}[5/8] Publishing application (this may take a few minutes)...${NC}"
+# Step 5: Copy application files to installation directory
+echo -e "${YELLOW}[5/8] Copying application files to installation directory...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_PATH="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PUBLISH_OUTPUT="$SCRIPT_DIR/publish"
+PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Clean previous publish output
-rm -rf "$PUBLISH_OUTPUT"
-
-# Publish as self-contained for linux-x64
-dotnet publish "$PROJECT_PATH" \
-    --configuration Release \
-    --runtime linux-x64 \
-    --self-contained true \
-    --output "$PUBLISH_OUTPUT" \
-    -p:PublishSingleFile=true \
-    -p:IncludeNativeLibrariesForSelfExtract=true
-
-echo -e "${GREEN}Application published successfully.${NC}"
-
-# Step 6: Copy files to installation directory
-echo -e "${YELLOW}[6/8] Copying files to installation directory...${NC}"
-cp -r "$PUBLISH_OUTPUT"/* "$INSTALL_PATH/"
+# Copy the pre-built binary and supporting files (excluding scripts directory)
+cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
+rm -rf "$INSTALL_PATH/scripts"
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH"
 echo -e "${GREEN}Files copied successfully.${NC}"
 
-# Step 7: Create configuration file
-echo -e "${YELLOW}[7/8] Creating configuration file...${NC}"
+# Step 6: Create configuration file
+echo -e "${YELLOW}[6/7] Creating configuration file...${NC}"
 cat > "$INSTALL_PATH/appsettings.json" << EOF
 {
   "DeviceManagerConfiguration": {
@@ -192,8 +177,8 @@ EOF
 chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH/appsettings.json"
 echo -e "${GREEN}Configuration file created at: $INSTALL_PATH/appsettings.json${NC}"
 
-# Step 8: Create and start systemd service
-echo -e "${YELLOW}[8/8] Installing systemd service...${NC}"
+# Step 7: Create and start systemd service
+echo -e "${YELLOW}[7/7] Installing systemd service...${NC}"
 cat > "/etc/systemd/system/$SERVICE_NAME.service" << EOF
 [Unit]
 Description=DonkeyWork Device Manager Client
@@ -249,3 +234,21 @@ echo -e "4. Stop service:     systemctl stop $SERVICE_NAME"
 echo -e "5. To uninstall:     Run ./uninstall.sh"
 echo ""
 echo -e "${CYAN}For more information, visit: https://github.com/donkeywork/device-manager${NC}"
+echo ""
+
+# Wait for log file to appear and tail it
+LOG_FILE="$INSTALL_PATH/DeviceClient.log"
+echo -e "${YELLOW}Waiting for log file to appear...${NC}"
+WAIT_COUNT=0
+while [ ! -f "$LOG_FILE" ] && [ $WAIT_COUNT -lt 10 ]; do
+    sleep 1
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+done
+
+if [ -f "$LOG_FILE" ]; then
+    echo -e "${GREEN}Log file found. Tailing logs (Ctrl+C to exit):${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    tail -f "$LOG_FILE"
+else
+    echo -e "${YELLOW}Log file not found yet. View logs with: journalctl -u $SERVICE_NAME -f${NC}"
+fi

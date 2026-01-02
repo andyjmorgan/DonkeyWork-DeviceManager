@@ -117,14 +117,28 @@ else {
 Write-Host "[5/7] Copying application files to installation directory..." -ForegroundColor Yellow
 $packageDir = Split-Path -Parent $PSScriptRoot
 
-# Copy the pre-built binary and supporting files (excluding scripts directory)
-Copy-Item -Path "$packageDir\*" -Destination $InstallPath -Recurse -Force -Exclude "scripts"
+# Copy the pre-built binary and supporting files (excluding scripts directory and device-tokens.json)
+Copy-Item -Path "$packageDir\*" -Destination $InstallPath -Recurse -Force -Exclude "scripts","device-tokens.json"
 
 # Restore device tokens if they were backed up
 if ($tokensBackup -and (Test-Path $tokensBackup.FullName)) {
-    Copy-Item -Path $tokensBackup.FullName -Destination $tokensFile -Force
-    Remove-Item -Path $tokensBackup.FullName -Force
-    Write-Host "Device tokens restored from backup" -ForegroundColor Green
+    try {
+        Copy-Item -Path $tokensBackup.FullName -Destination $tokensFile -Force -ErrorAction Stop
+
+        # Verify the file was restored and has content
+        if ((Test-Path $tokensFile) -and ((Get-Item $tokensFile).Length -gt 0)) {
+            Remove-Item -Path $tokensBackup.FullName -Force
+            Write-Host "Device tokens restored from backup" -ForegroundColor Green
+        } else {
+            Write-Host "WARNING: Device tokens restore verification failed. Backup kept at: $($tokensBackup.FullName)" -ForegroundColor Yellow
+            Write-Host "Manual intervention required: copy $($tokensBackup.FullName) to $tokensFile" -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "ERROR: Failed to restore device tokens. Backup preserved at: $($tokensBackup.FullName)" -ForegroundColor Red
+        Write-Host "Manual intervention required: copy $($tokensBackup.FullName) to $tokensFile" -ForegroundColor Red
+        Write-Host "Error details: $_" -ForegroundColor Red
+    }
 }
 
 # Update API URL in appsettings.json if specified

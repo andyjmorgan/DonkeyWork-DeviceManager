@@ -178,15 +178,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Copy the pre-built binary and supporting files (excluding scripts directory)
-cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
-rm -rf "$INSTALL_PATH/scripts"
+# Note: We use rsync if available to exclude device-tokens.json from source package
+if command -v rsync &> /dev/null; then
+    rsync -a --exclude='scripts' --exclude='device-tokens.json' "$PACKAGE_DIR"/ "$INSTALL_PATH/"
+else
+    cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
+    rm -rf "$INSTALL_PATH/scripts"
+    rm -f "$INSTALL_PATH/device-tokens.json"  # Remove if accidentally copied from package
+fi
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 
 # Restore device tokens if they were backed up
 if [ -n "$TOKENS_BACKUP" ] && [ -f "$TOKENS_BACKUP" ]; then
-    cp "$TOKENS_BACKUP" "$TOKENS_FILE"
-    rm "$TOKENS_BACKUP"
-    echo -e "${GREEN}Device tokens restored from backup${NC}"
+    if cp "$TOKENS_BACKUP" "$TOKENS_FILE"; then
+        # Verify the file was restored and has content
+        if [ -f "$TOKENS_FILE" ] && [ -s "$TOKENS_FILE" ]; then
+            rm "$TOKENS_BACKUP"
+            echo -e "${GREEN}Device tokens restored from backup${NC}"
+        else
+            echo -e "${YELLOW}WARNING: Device tokens restore verification failed. Backup kept at: $TOKENS_BACKUP${NC}"
+            echo -e "${YELLOW}Manual intervention required: cp $TOKENS_BACKUP $TOKENS_FILE${NC}"
+        fi
+    else
+        echo -e "${RED}ERROR: Failed to restore device tokens. Backup preserved at: $TOKENS_BACKUP${NC}"
+        echo -e "${RED}Manual intervention required: cp $TOKENS_BACKUP $TOKENS_FILE${NC}"
+    fi
 fi
 
 # Grant CAP_SYS_BOOT capability for system restart/shutdown

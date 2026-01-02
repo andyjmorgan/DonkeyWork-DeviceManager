@@ -161,7 +161,7 @@ else
 fi
 
 # Step 5: Copy application files to installation directory
-echo -e "${YELLOW}[5/8] Copying application files to installation directory...${NC}"
+echo -e "${YELLOW}[5/7] Copying application files to installation directory...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -169,27 +169,20 @@ PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
 rm -rf "$INSTALL_PATH/scripts"
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
+
+# Update API URL in appsettings.json if specified
+if [ "$API_BASE_URL" != "https://devicemanager.donkeywork.dev" ]; then
+    echo -e "${YELLOW}[6/7] Updating API URL in configuration...${NC}"
+    sed -i "s|http://devicemanager.donkeywork.dev|$API_BASE_URL|g" "$INSTALL_PATH/appsettings.json"
+    sed -i "s|https://devicemanager.donkeywork.dev|$API_BASE_URL|g" "$INSTALL_PATH/appsettings.json"
+    echo -e "${GREEN}API URL updated to: $API_BASE_URL${NC}"
+else
+    echo -e "${YELLOW}[6/7] Configuration file already present${NC}"
+    echo -e "${GREEN}Using default API URL: $API_BASE_URL${NC}"
+fi
+
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH"
 echo -e "${GREEN}Files copied successfully.${NC}"
-
-# Step 6: Create configuration file
-echo -e "${YELLOW}[6/7] Creating configuration file...${NC}"
-cat > "$INSTALL_PATH/appsettings.json" << EOF
-{
-  "DeviceManagerConfiguration": {
-    "ApiBaseUrl": "$API_BASE_URL"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning",
-      "Microsoft.Hosting.Lifetime": "Information"
-    }
-  }
-}
-EOF
-chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_PATH/appsettings.json"
-echo -e "${GREEN}Configuration file created at: $INSTALL_PATH/appsettings.json${NC}"
 
 # Step 7: Create and start systemd service
 echo -e "${YELLOW}[7/7] Installing systemd service...${NC}"

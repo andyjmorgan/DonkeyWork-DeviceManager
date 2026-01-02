@@ -30,7 +30,7 @@ try
     // Configure and validate options
     builder.Services
         .AddOptions<DonkeyWork.DeviceManager.DeviceClient.Configuration.DeviceManagerConfiguration>()
-        .BindConfiguration("DeviceManagerConfiguration")
+        .BindConfiguration("DeviceManager")
         .ValidateDataAnnotations()
         .ValidateOnStart();
 

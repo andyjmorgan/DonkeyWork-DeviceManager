@@ -102,32 +102,27 @@ else {
 }
 
 # Step 4: Copy application files to installation directory
-Write-Host "[4/6] Copying application files to installation directory..." -ForegroundColor Yellow
+Write-Host "[4/5] Copying application files to installation directory..." -ForegroundColor Yellow
 $packageDir = Split-Path -Parent $PSScriptRoot
 
 # Copy the pre-built binary and supporting files (excluding scripts directory)
 Copy-Item -Path "$packageDir\*" -Destination $InstallPath -Recurse -Force -Exclude "scripts"
-Write-Host "Files copied successfully." -ForegroundColor Green
 
-# Step 5: Create configuration file
-Write-Host "[5/6] Creating configuration file..." -ForegroundColor Yellow
-$configPath = Join-Path $InstallPath "appsettings.json"
-$config = @"
-{
-  "DeviceManagerConfiguration": {
-    "ApiBaseUrl": "$ApiBaseUrl"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning",
-      "Microsoft.Hosting.Lifetime": "Information"
-    }
-  }
+# Update API URL in appsettings.json if specified
+if ($ApiBaseUrl -ne "https://devicemanager.donkeywork.dev") {
+    Write-Host "[5/5] Updating API URL in configuration..." -ForegroundColor Yellow
+    $configPath = Join-Path $InstallPath "appsettings.json"
+    $config = Get-Content $configPath -Raw
+    $config = $config -replace 'http://devicemanager.donkeywork.dev', $ApiBaseUrl
+    $config = $config -replace 'https://devicemanager.donkeywork.dev', $ApiBaseUrl
+    Set-Content -Path $configPath -Value $config -Force
+    Write-Host "API URL updated to: $ApiBaseUrl" -ForegroundColor Green
+} else {
+    Write-Host "[5/5] Configuration file already present" -ForegroundColor Yellow
+    Write-Host "Using default API URL: $ApiBaseUrl" -ForegroundColor Green
 }
-"@
-Set-Content -Path $configPath -Value $config -Force
-Write-Host "Configuration file created at: $configPath" -ForegroundColor Green
+
+Write-Host "Files copied successfully." -ForegroundColor Green
 
 # Step 6: Install and start Windows Service
 Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow

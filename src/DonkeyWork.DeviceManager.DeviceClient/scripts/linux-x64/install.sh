@@ -35,7 +35,7 @@ EXAMPLES:
 
 NOTES:
     - This script must be run as root (use sudo)
-    - .NET 10.0 runtime will be included in the installation
+    - Self-contained binary includes all dependencies
     - The service will be configured to start automatically
     - Installs to: /opt/donkeywork/device-client
     - API endpoint: https://devicemanager.donkeywork.dev
@@ -70,13 +70,6 @@ done
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}ERROR: This script must be run as root (use sudo)${NC}"
    exit 1
-fi
-
-# Check if dotnet is available
-if ! command -v dotnet &> /dev/null; then
-    echo -e "${RED}ERROR: dotnet CLI is not installed${NC}"
-    echo "Please install .NET 10.0 SDK first: https://dotnet.microsoft.com/download"
-    exit 1
 fi
 
 echo -e "${CYAN}========================================${NC}"

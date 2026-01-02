@@ -32,7 +32,7 @@ EXAMPLES:
 
 NOTES:
     - This script must be run as Administrator
-    - .NET 10.0 runtime will be included in the installation
+    - Self-contained binary includes all dependencies
     - The service will be configured to start automatically
     - API endpoint: https://devicemanager.donkeywork.dev
     - Configuration file will be created at: <InstallPath>\appsettings.json

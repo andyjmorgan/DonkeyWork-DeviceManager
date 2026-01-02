@@ -127,6 +127,9 @@ public static class ServiceCollectionExtensions
         // Register HTTP client for Keycloak communication
         services.AddHttpClient();
 
+        // Register centralized Keycloak service
+        services.AddSingleton<IKeycloakService, KeycloakService>();
+
         // Register authentication service
         services.AddScoped<IUserAuthService, UserAuthService>();
 

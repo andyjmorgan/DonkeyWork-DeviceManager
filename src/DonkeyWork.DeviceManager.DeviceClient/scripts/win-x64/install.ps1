@@ -62,8 +62,20 @@ if ($existingService) {
     Write-Host "Existing service removed." -ForegroundColor Green
 }
 
-# Step 2: Create installation directory
-Write-Host "[2/6] Creating installation directory..." -ForegroundColor Yellow
+# Step 2: Backup device tokens (if upgrading)
+Write-Host "[2/7] Backing up device tokens (if present)..." -ForegroundColor Yellow
+$tokensFile = Join-Path $InstallPath "device-tokens.json"
+$tokensBackup = $null
+if (Test-Path $tokensFile) {
+    $tokensBackup = New-TemporaryFile
+    Copy-Item -Path $tokensFile -Destination $tokensBackup.FullName -Force
+    Write-Host "Device tokens backed up to temporary location" -ForegroundColor Green
+} else {
+    Write-Host "No existing device tokens found (fresh install)" -ForegroundColor Yellow
+}
+
+# Step 3: Create installation directory
+Write-Host "[3/7] Creating installation directory..." -ForegroundColor Yellow
 if (Test-Path $InstallPath) {
     Write-Host "Installation directory already exists. Removing old files..." -ForegroundColor Yellow
     Remove-Item -Path $InstallPath -Recurse -Force
@@ -71,8 +83,8 @@ if (Test-Path $InstallPath) {
 New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
 Write-Host "Installation directory created at: $InstallPath" -ForegroundColor Green
 
-# Step 3: Install OSQuery (if not already installed)
-Write-Host "[3/7] Checking OSQuery installation..." -ForegroundColor Yellow
+# Step 4: Install OSQuery (if not already installed)
+Write-Host "[4/7] Checking OSQuery installation..." -ForegroundColor Yellow
 $osqueryPath = "C:\Program Files\osquery\osqueryi.exe"
 if (-not (Test-Path $osqueryPath)) {
     Write-Host "OSQuery not found. Downloading installer..." -ForegroundColor Yellow
@@ -101,16 +113,23 @@ else {
     Write-Host "OSQuery is already installed." -ForegroundColor Green
 }
 
-# Step 4: Copy application files to installation directory
-Write-Host "[4/5] Copying application files to installation directory..." -ForegroundColor Yellow
+# Step 5: Copy application files to installation directory
+Write-Host "[5/7] Copying application files to installation directory..." -ForegroundColor Yellow
 $packageDir = Split-Path -Parent $PSScriptRoot
 
 # Copy the pre-built binary and supporting files (excluding scripts directory)
 Copy-Item -Path "$packageDir\*" -Destination $InstallPath -Recurse -Force -Exclude "scripts"
 
+# Restore device tokens if they were backed up
+if ($tokensBackup -and (Test-Path $tokensBackup.FullName)) {
+    Copy-Item -Path $tokensBackup.FullName -Destination $tokensFile -Force
+    Remove-Item -Path $tokensBackup.FullName -Force
+    Write-Host "Device tokens restored from backup" -ForegroundColor Green
+}
+
 # Update API URL in appsettings.json if specified
 if ($ApiBaseUrl -ne "https://devicemanager.donkeywork.dev") {
-    Write-Host "[5/5] Updating API URL in configuration..." -ForegroundColor Yellow
+    Write-Host "[6/7] Updating API URL in configuration..." -ForegroundColor Yellow
     $configPath = Join-Path $InstallPath "appsettings.json"
     $config = Get-Content $configPath -Raw
     $config = $config -replace 'http://devicemanager.donkeywork.dev', $ApiBaseUrl
@@ -118,14 +137,14 @@ if ($ApiBaseUrl -ne "https://devicemanager.donkeywork.dev") {
     Set-Content -Path $configPath -Value $config -Force
     Write-Host "API URL updated to: $ApiBaseUrl" -ForegroundColor Green
 } else {
-    Write-Host "[5/5] Configuration file already present" -ForegroundColor Yellow
+    Write-Host "[6/7] Configuration file already present" -ForegroundColor Yellow
     Write-Host "Using default API URL: $ApiBaseUrl" -ForegroundColor Green
 }
 
 Write-Host "Files copied successfully." -ForegroundColor Green
 
-# Step 6: Install and start Windows Service
-Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
+# Step 7: Install and start Windows Service
+Write-Host "[7/7] Installing Windows Service..." -ForegroundColor Yellow
 $exePath = Join-Path $InstallPath "DonkeyWork.DeviceManager.DeviceClient.exe"
 
 # Create the service

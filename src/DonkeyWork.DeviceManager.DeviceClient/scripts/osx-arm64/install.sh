@@ -94,8 +94,20 @@ if [ -f "$PLIST_PATH" ]; then
     echo -e "${GREEN}Existing service removed.${NC}"
 fi
 
-# Step 2: Create installation directory
-echo -e "${YELLOW}[2/6] Creating installation directory...${NC}"
+# Step 2: Backup device tokens (if upgrading)
+echo -e "${YELLOW}[2/7] Backing up device tokens (if present)...${NC}"
+TOKENS_FILE="$INSTALL_PATH/device-tokens.json"
+TOKENS_BACKUP=""
+if [ -f "$TOKENS_FILE" ]; then
+    TOKENS_BACKUP=$(mktemp)
+    cp "$TOKENS_FILE" "$TOKENS_BACKUP"
+    echo -e "${GREEN}Device tokens backed up to temporary location${NC}"
+else
+    echo -e "${YELLOW}No existing device tokens found (fresh install)${NC}"
+fi
+
+# Step 3: Create installation directory
+echo -e "${YELLOW}[3/7] Creating installation directory...${NC}"
 if [ -d "$INSTALL_PATH" ]; then
     echo -e "${YELLOW}Installation directory already exists. Removing old files...${NC}"
     rm -rf "$INSTALL_PATH"
@@ -103,8 +115,8 @@ fi
 mkdir -p "$INSTALL_PATH"
 echo -e "${GREEN}Installation directory created at: $INSTALL_PATH${NC}"
 
-# Step 3: Install OSQuery (if not already installed)
-echo -e "${YELLOW}[3/7] Checking OSQuery installation...${NC}"
+# Step 4: Install OSQuery (if not already installed)
+echo -e "${YELLOW}[4/7] Checking OSQuery installation...${NC}"
 if ! command -v osqueryi &> /dev/null; then
     echo -e "${YELLOW}OSQuery not found. Installing via Homebrew...${NC}"
 
@@ -123,8 +135,8 @@ else
     echo -e "${GREEN}OSQuery is already installed.${NC}"
 fi
 
-# Step 4: Copy application files to installation directory
-echo -e "${YELLOW}[4/5] Copying application files to installation directory...${NC}"
+# Step 5: Copy application files to installation directory
+echo -e "${YELLOW}[5/7] Copying application files to installation directory...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -133,21 +145,28 @@ cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
 rm -rf "$INSTALL_PATH/scripts"
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 
+# Restore device tokens if they were backed up
+if [ -n "$TOKENS_BACKUP" ] && [ -f "$TOKENS_BACKUP" ]; then
+    cp "$TOKENS_BACKUP" "$TOKENS_FILE"
+    rm "$TOKENS_BACKUP"
+    echo -e "${GREEN}Device tokens restored from backup${NC}"
+fi
+
 # Update API URL in appsettings.json if specified
 if [ "$API_BASE_URL" != "https://devicemanager.donkeywork.dev" ]; then
-    echo -e "${YELLOW}[5/5] Updating API URL in configuration...${NC}"
+    echo -e "${YELLOW}[6/7] Updating API URL in configuration...${NC}"
     sed -i '' "s|http://devicemanager.donkeywork.dev|$API_BASE_URL|g" "$INSTALL_PATH/appsettings.json"
     sed -i '' "s|https://devicemanager.donkeywork.dev|$API_BASE_URL|g" "$INSTALL_PATH/appsettings.json"
     echo -e "${GREEN}API URL updated to: $API_BASE_URL${NC}"
 else
-    echo -e "${YELLOW}[5/5] Configuration file already present${NC}"
+    echo -e "${YELLOW}[6/7] Configuration file already present${NC}"
     echo -e "${GREEN}Using default API URL: $API_BASE_URL${NC}"
 fi
 
 echo -e "${GREEN}Files copied successfully.${NC}"
 
-# Step 6: Create and load launchd service
-echo -e "${YELLOW}[6/6] Installing launchd service...${NC}"
+# Step 7: Create and load launchd service
+echo -e "${YELLOW}[7/7] Installing launchd service...${NC}"
 cat > "$PLIST_PATH" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -179,7 +179,7 @@ jobs:
             --runtime ${{ matrix.runtime }} \
             --self-contained true \
             --output ./publish/${{ matrix.runtime }} \
-            /p:PublishSingleFile=false \
+            /p:PublishSingleFile=true \
             /p:PublishTrimmed=false \
             /p:Version=${{ needs.version.outputs.version }}
 

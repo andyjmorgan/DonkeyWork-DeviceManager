@@ -179,8 +179,6 @@ jobs:
             --runtime ${{ matrix.runtime }} \
             --self-contained true \
             --output ./publish/${{ matrix.runtime }} \
-            /p:PublishSingleFile=true \
-            /p:PublishTrimmed=false \
             /p:Version=${{ needs.version.outputs.version }}
 
       - name: Copy Install Scripts

@@ -64,6 +64,8 @@ app.MapDeviceInformationEndpoints();
 app.MapBuildingEndpoints();
 app.MapRoomEndpoints();
 app.MapProvisioningEndpoints();
+app.MapOSQueryEndpoints();
+app.MapAuditEndpoints();
 
 app.MapHubEndpoints();
 

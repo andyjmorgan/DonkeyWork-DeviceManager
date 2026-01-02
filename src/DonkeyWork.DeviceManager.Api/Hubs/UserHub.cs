@@ -1,5 +1,6 @@
 namespace DonkeyWork.DeviceManager.Api.Hubs;
 
+using DonkeyWork.DeviceManager.Api.Services;
 using DonkeyWork.DeviceManager.Backend.Common.RequestContextServices;
 using DonkeyWork.DeviceManager.Common.SignalR;
 using Microsoft.AspNetCore.Authorization;
@@ -16,15 +17,21 @@ public class UserHub : Hub
 {
     private readonly IRequestContextProvider _requestContextProvider;
     private readonly IHubContext<DeviceHub> _deviceHubContext;
+    private readonly IDeviceAuditService _auditService;
+    private readonly IOSQueryService _osqueryService;
     private readonly ILogger<UserHub> _logger;
 
     public UserHub(
         IRequestContextProvider requestContextProvider,
         IHubContext<DeviceHub> deviceHubContext,
+        IDeviceAuditService auditService,
+        IOSQueryService osqueryService,
         ILogger<UserHub> logger)
     {
         _requestContextProvider = requestContextProvider;
         _deviceHubContext = deviceHubContext;
+        _auditService = auditService;
+        _osqueryService = osqueryService;
         _logger = logger;
     }
 
@@ -88,6 +95,9 @@ public class UserHub : Hub
 
         try
         {
+            // Log command to audit trail
+            await _auditService.LogCommandAsync(deviceId, "Ping", context.UserId);
+
             // Send command to device's connection
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
@@ -121,25 +131,30 @@ public class UserHub : Hub
         var context = _requestContextProvider.Context;
         context.PopulateFromPrincipal(Context.User, _logger);
 
+        var commandId = Guid.NewGuid();
+
         _logger.LogInformation(
-            "User {UserId} sending shutdown command to device {DeviceId}",
-            context.UserId, deviceId);
+            "User {UserId} sending shutdown command {CommandId} to device {DeviceId}",
+            context.UserId, commandId, deviceId);
 
         try
         {
+            // Log command to audit trail
+            await _auditService.LogCommandAsync(deviceId, "Shutdown", context.UserId);
+
             // Send command to device's connection
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
                 .SendAsync(HubMethodNames.UserToDevice.ReceiveShutdownCommand, new
                 {
-                    CommandId = Guid.NewGuid(),
+                    CommandId = commandId,
                     Timestamp = DateTimeOffset.UtcNow,
                     RequestedBy = context.UserId
                 });
 
             _logger.LogInformation(
-                "Shutdown command sent to device {DeviceId} from user {UserId}",
-                deviceId, context.UserId);
+                "Shutdown command {CommandId} sent to device {DeviceId} from user {UserId}",
+                commandId, deviceId, context.UserId);
         }
         catch (Exception ex)
         {
@@ -160,30 +175,77 @@ public class UserHub : Hub
         var context = _requestContextProvider.Context;
         context.PopulateFromPrincipal(Context.User, _logger);
 
+        var commandId = Guid.NewGuid();
+
         _logger.LogInformation(
-            "User {UserId} sending restart command to device {DeviceId}",
-            context.UserId, deviceId);
+            "User {UserId} sending restart command {CommandId} to device {DeviceId}",
+            context.UserId, commandId, deviceId);
+
+        try
+        {
+            // Log command to audit trail
+            await _auditService.LogCommandAsync(deviceId, "Restart", context.UserId);
+
+            // Send command to device's connection
+            await _deviceHubContext.Clients
+                .User(deviceId.ToString())
+                .SendAsync(HubMethodNames.UserToDevice.ReceiveRestartCommand, new
+                {
+                    CommandId = commandId,
+                    Timestamp = DateTimeOffset.UtcNow,
+                    RequestedBy = context.UserId
+                });
+
+            _logger.LogInformation(
+                "Restart command {CommandId} sent to device {DeviceId} from user {UserId}",
+                commandId, deviceId, context.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send restart command to device {DeviceId}",
+                deviceId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Sends an OSQuery command to a specific device.
+    /// The device will execute the query and return results via SendOSQueryResult.
+    /// </summary>
+    /// <param name="deviceId">The device ID to query</param>
+    /// <param name="query">The SQL query to execute</param>
+    /// <param name="executionId">The execution ID for tracking results</param>
+    public async Task ExecuteOSQuery(Guid deviceId, string query, Guid executionId)
+    {
+        var context = _requestContextProvider.Context;
+        context.PopulateFromPrincipal(Context.User, _logger);
+
+        _logger.LogInformation(
+            "User {UserId} sending OSQuery command (execution {ExecutionId}) to device {DeviceId}",
+            context.UserId, executionId, deviceId);
 
         try
         {
             // Send command to device's connection
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
-                .SendAsync(HubMethodNames.UserToDevice.ReceiveRestartCommand, new
+                .SendAsync(HubMethodNames.UserToDevice.ReceiveOSQueryCommand, new
                 {
-                    CommandId = Guid.NewGuid(),
+                    ExecutionId = executionId,
+                    Query = query,
                     Timestamp = DateTimeOffset.UtcNow,
                     RequestedBy = context.UserId
                 });
 
             _logger.LogInformation(
-                "Restart command sent to device {DeviceId} from user {UserId}",
-                deviceId, context.UserId);
+                "OSQuery command (execution {ExecutionId}) sent to device {DeviceId} from user {UserId}",
+                executionId, deviceId, context.UserId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Failed to send restart command to device {DeviceId}",
+                "Failed to send OSQuery command to device {DeviceId}",
                 deviceId);
             throw;
         }

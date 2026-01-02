@@ -15,6 +15,7 @@ import { getDevices, updateDeviceDescription, deleteDevice } from '../services/d
 import { userHubService } from '../services/userHubService';
 import OSIcon from './OSIcon';
 import DeviceActionsMenu from './DeviceActionsMenu';
+import { OSQueryDialog } from './OSQueryDialog';
 import type { DeviceRegistrationLookupDto, BuildingDto, RoomDto } from '../types/deviceRegistration';
 import type { DeviceResponse, PaginatedResponse } from '../types/device';
 import type { DeviceStatusNotification } from '../types/notifications';
@@ -37,6 +38,7 @@ function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [editDescriptionDialogVisible, setEditDescriptionDialogVisible] = useState(false);
   const [deleteConfirmDialogVisible, setDeleteConfirmDialogVisible] = useState(false);
+  const [osqueryDialogVisible, setOsqueryDialogVisible] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<DeviceResponse | null>(null);
   const [newDescription, setNewDescription] = useState('');
 
@@ -236,6 +238,11 @@ function Dashboard() {
         life: 3000,
       });
     }
+  };
+
+  const handleRunOSQuery = (device: DeviceResponse) => {
+    setSelectedDevice(device);
+    setOsqueryDialogVisible(true);
   };
 
   const handleShutdownDevice = async (deviceId: string, deviceName: string) => {
@@ -474,6 +481,7 @@ function Dashboard() {
                         device={rowData}
                         onEditDescription={handleEditDescription}
                         onPing={handlePingDevice}
+                        onRunOSQuery={handleRunOSQuery}
                         onRestart={handleRestartDevice}
                         onShutdown={handleShutdownDevice}
                         onDelete={handleDeleteDevice}
@@ -506,6 +514,7 @@ function Dashboard() {
                             device={device}
                             onEditDescription={handleEditDescription}
                             onPing={handlePingDevice}
+                            onRunOSQuery={handleRunOSQuery}
                             onRestart={handleRestartDevice}
                             onShutdown={handleShutdownDevice}
                             onDelete={handleDeleteDevice}
@@ -726,6 +735,12 @@ function Dashboard() {
           </div>
         )}
       </Dialog>
+
+      <OSQueryDialog
+        visible={osqueryDialogVisible}
+        device={selectedDevice}
+        onHide={() => setOsqueryDialogVisible(false)}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Avatar } from 'primereact/avatar';
 import { Menu } from 'primereact/menu';
-import { LayoutDashboard, Building2, DoorOpen, Menu as MenuIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Building2, DoorOpen, Search, Menu as MenuIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { loadTheme, getStoredTheme } from '../../utils/theme';
 import './Layout.css';
 
@@ -39,6 +39,11 @@ function Layout({ children }: LayoutProps) {
       label: 'Rooms',
       icon: <DoorOpen size={20} />,
       path: '/rooms',
+    },
+    {
+      label: 'OSQuery',
+      icon: <Search size={20} />,
+      path: '/osquery',
     },
   ];
 

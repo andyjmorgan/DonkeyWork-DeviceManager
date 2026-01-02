@@ -1,5 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import type { DeviceStatusNotification } from '../types/notifications';
+import type { OSQueryResult } from '../types/osquery';
 
 /**
  * SignalR hub connection manager for real-time notifications
@@ -164,6 +165,42 @@ class UserHubService {
 
     await this.connection.invoke('RestartDevice', deviceId);
     console.log(`Restart command sent to device ${deviceId}`);
+  }
+
+  /**
+   * Execute OSQuery on a device
+   */
+  async executeOSQuery(deviceId: string, query: string, executionId: string): Promise<void> {
+    if (!this.connection) {
+      throw new Error('SignalR connection not started');
+    }
+
+    await this.connection.invoke('ExecuteOSQuery', deviceId, query, executionId);
+    console.log(`OSQuery command sent to device ${deviceId}, executionId: ${executionId}`);
+  }
+
+  /**
+   * Subscribe to OSQuery results
+   * Must be called after start() to ensure connection exists
+   */
+  onOSQueryResult(callback: (result: OSQueryResult) => void): void {
+    if (!this.connection) {
+      console.error('SignalR connection not started - cannot subscribe to events');
+      throw new Error('SignalR connection not started');
+    }
+
+    this.connection.on('ReceiveOSQueryResult', callback);
+    console.log('Subscribed to ReceiveOSQueryResult events');
+  }
+
+  /**
+   * Unsubscribe from OSQuery results
+   */
+  offOSQueryResult(callback: (result: OSQueryResult) => void): void {
+    if (this.connection) {
+      this.connection.off('ReceiveOSQueryResult', callback);
+      console.log('Unsubscribed from ReceiveOSQueryResult events');
+    }
   }
 
   /**

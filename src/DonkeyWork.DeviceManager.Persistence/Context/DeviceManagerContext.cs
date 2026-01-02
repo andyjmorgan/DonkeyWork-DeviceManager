@@ -40,6 +40,26 @@ public class DeviceManagerContext(DbContextOptions options, IRequestContextProvi
     /// </summary>
     public DbSet<TenantEntity> Tenants { get; set; }
 
+    /// <summary>
+    /// Gets or sets the OSQuery history.
+    /// </summary>
+    public DbSet<OSQueryHistoryEntity> OSQueryHistory { get; set; }
+
+    /// <summary>
+    /// Gets or sets the OSQuery executions.
+    /// </summary>
+    public DbSet<OSQueryExecutionEntity> OSQueryExecutions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the OSQuery execution results.
+    /// </summary>
+    public DbSet<OSQueryExecutionResultEntity> OSQueryExecutionResults { get; set; }
+
+    /// <summary>
+    /// Gets or sets the device audit logs.
+    /// </summary>
+    public DbSet<DeviceAuditLogEntity> DeviceAuditLogs { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("DeviceManager");
@@ -69,6 +89,49 @@ public class DeviceManagerContext(DbContextOptions options, IRequestContextProvi
         modelBuilder.Entity<DeviceEntity>()
             .Property(x => x.Architecture)
             .HasConversion<string>();
+
+        // Configure OSQuery relationships
+        modelBuilder.Entity<OSQueryExecutionEntity>()
+            .HasOne(x => x.QueryHistory)
+            .WithMany(x => x.Executions)
+            .HasForeignKey(x => x.QueryHistoryId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<OSQueryExecutionResultEntity>()
+            .HasOne(x => x.Execution)
+            .WithMany(x => x.Results)
+            .HasForeignKey(x => x.ExecutionId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<OSQueryExecutionResultEntity>()
+            .HasOne(x => x.Device)
+            .WithMany()
+            .HasForeignKey(x => x.DeviceId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Configure DeviceAuditLog relationships
+        modelBuilder.Entity<DeviceAuditLogEntity>()
+            .HasOne(x => x.Device)
+            .WithMany()
+            .HasForeignKey(x => x.DeviceId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Add indexes for frequently queried columns
+        modelBuilder.Entity<OSQueryHistoryEntity>()
+            .HasIndex(x => x.UserId);
+
+        modelBuilder.Entity<OSQueryExecutionEntity>()
+            .HasIndex(x => x.ExecutedAt);
+
+        modelBuilder.Entity<DeviceAuditLogEntity>()
+            .HasIndex(x => new { x.DeviceId, x.Timestamp });
+
+        modelBuilder.Entity<DeviceAuditLogEntity>()
+            .HasIndex(x => x.TenantId);
 
         // Apply global query filters for tenant isolation
         ApplyTenantQueryFilters(modelBuilder);

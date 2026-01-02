@@ -1,6 +1,7 @@
 using DonkeyWork.DeviceManager.DeviceClient.Configuration;
 using DonkeyWork.DeviceManager.DeviceClient.Models;
 using DonkeyWork.DeviceManager.DeviceClient.Services.Device;
+using DonkeyWork.DeviceManager.DeviceClient.Services.OSQuery;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 
@@ -17,6 +18,7 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
     private readonly DeviceManagerConfiguration _config;
     private readonly ILogger<DeviceHubConnectionService> _logger;
     private readonly ISystemControlService _systemControl;
+    private readonly IOSQueryService _osqueryService;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
     private HubConnection? _hubConnection;
@@ -25,11 +27,13 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
     public DeviceHubConnectionService(
         IOptions<DeviceManagerConfiguration> config,
         ILogger<DeviceHubConnectionService> logger,
-        ISystemControlService systemControl)
+        ISystemControlService systemControl,
+        IOSQueryService osqueryService)
     {
         _config = config.Value;
         _logger = logger;
         _systemControl = systemControl;
+        _osqueryService = osqueryService;
 
         _logger.LogDebug("Device hub connection service initialized with API base URL: {ApiBaseUrl}", _config.ApiBaseUrl);
     }
@@ -320,6 +324,53 @@ public class DeviceHubConnectionService : IDeviceHubConnectionService, IAsyncDis
                 catch
                 {
                     // Ignore errors sending failure acknowledgment
+                }
+            }
+        });
+
+        // Handler for OSQuery commands
+        _hubConnection.On<OSQueryCommandData>(HubMethodNames.UserToDevice.ReceiveOSQueryCommand, async (command) =>
+        {
+            _logger.LogInformation("Received OSQuery command from user {RequestedBy}, ExecutionId: {ExecutionId}, Query: {Query}",
+                command.RequestedBy, command.ExecutionId, command.Query);
+
+            try
+            {
+                // Execute the query
+                var result = await _osqueryService.ExecuteQueryAsync(command.Query);
+
+                _logger.LogInformation("OSQuery execution completed for {ExecutionId} - Success: {Success}, Rows: {RowCount}, Time: {ExecutionTimeMs}ms",
+                    command.ExecutionId, result.Success, result.RowCount, result.ExecutionTimeMs);
+
+                // Send result back to server
+                await _hubConnection.InvokeAsync(HubMethodNames.DeviceInvoke.SendOSQueryResult,
+                    command.ExecutionId,
+                    result.Success,
+                    result.ErrorMessage,
+                    result.RawJson,
+                    result.ExecutionTimeMs,
+                    result.RowCount);
+
+                _logger.LogInformation("Sent OSQuery result for execution {ExecutionId}", command.ExecutionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling OSQuery command {ExecutionId}", command.ExecutionId);
+
+                try
+                {
+                    // Send failure result
+                    await _hubConnection.InvokeAsync(HubMethodNames.DeviceInvoke.SendOSQueryResult,
+                        command.ExecutionId,
+                        false,
+                        $"Error executing query: {ex.Message}",
+                        null,
+                        0,
+                        0);
+                }
+                catch
+                {
+                    // Ignore errors sending failure result
                 }
             }
         });

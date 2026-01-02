@@ -1,6 +1,7 @@
 namespace DonkeyWork.DeviceManager.Api.Hubs;
 
 using DonkeyWork.DeviceManager.Api.Authorization;
+using DonkeyWork.DeviceManager.Api.Services;
 using DonkeyWork.DeviceManager.Api.Services.HubActivity;
 using DonkeyWork.DeviceManager.Backend.Common.RequestContextServices;
 using DonkeyWork.DeviceManager.Common.SignalR;
@@ -21,6 +22,8 @@ public class DeviceHub : Hub
     private readonly IRequestContextProvider _requestContextProvider;
     private readonly IHubActivityChannel _activityChannel;
     private readonly IHubContext<UserHub> _userHubContext;
+    private readonly IOSQueryService _osqueryService;
+    private readonly IDeviceAuditService _auditService;
     private readonly ILogger<DeviceHub> _logger;
 
     public DeviceHub(
@@ -28,12 +31,16 @@ public class DeviceHub : Hub
         IRequestContextProvider requestContextProvider,
         IHubActivityChannel activityChannel,
         IHubContext<UserHub> userHubContext,
+        IOSQueryService osqueryService,
+        IDeviceAuditService auditService,
         ILogger<DeviceHub> logger)
     {
         _dbContext = dbContext;
         _requestContextProvider = requestContextProvider;
         _activityChannel = activityChannel;
         _userHubContext = userHubContext;
+        _osqueryService = osqueryService;
+        _auditService = auditService;
         _logger = logger;
     }
 
@@ -60,6 +67,9 @@ public class DeviceHub : Hub
             IsDeviceSession = context.IsDeviceSession,
             HubName = nameof(DeviceHub)
         });
+
+        // Log device online status to audit trail
+        await _auditService.LogStatusChangeAsync(context.UserId, true);
 
         await base.OnConnectedAsync();
     }
@@ -96,6 +106,9 @@ public class DeviceHub : Hub
             HubName = nameof(DeviceHub),
             DisconnectReason = exception?.Message
         });
+
+        // Log device offline status to audit trail
+        await _auditService.LogStatusChangeAsync(context.UserId, false);
 
         await base.OnDisconnectedAsync(exception);
     }
@@ -188,5 +201,77 @@ public class DeviceHub : Hub
                 Message = message,
                 Timestamp = DateTimeOffset.UtcNow
             });
+    }
+
+    /// <summary>
+    /// Device sends OSQuery result back to users.
+    /// </summary>
+    /// <param name="executionId">The execution ID</param>
+    /// <param name="success">Whether the query executed successfully</param>
+    /// <param name="errorMessage">Error message if query failed</param>
+    /// <param name="rawJson">The JSON result from osquery</param>
+    /// <param name="executionTimeMs">Execution time in milliseconds</param>
+    /// <param name="rowCount">Number of rows returned</param>
+    public async Task SendOSQueryResult(Guid executionId, bool success, string? errorMessage, string? rawJson, int executionTimeMs, int rowCount)
+    {
+        // Populate RequestContext from Hub's ClaimsPrincipal
+        var context = _requestContextProvider.Context;
+        context.PopulateFromPrincipal(Context.User, _logger);
+
+        var deviceId = context.UserId;
+
+        _logger.LogInformation(
+            "Device {DeviceId} sent OSQuery result for execution {ExecutionId} - Success: {Success}, Rows: {RowCount}, Time: {ExecutionTimeMs}ms",
+            deviceId, executionId, success, rowCount, executionTimeMs);
+
+        try
+        {
+            // Save result to database
+            await _osqueryService.SaveExecutionResultAsync(
+                executionId,
+                deviceId,
+                success,
+                errorMessage,
+                rawJson,
+                executionTimeMs,
+                rowCount);
+
+            // Update execution counts
+            await _osqueryService.UpdateExecutionCountsAsync(executionId);
+
+            // Log OSQuery execution to audit trail
+            await _auditService.LogOSQueryAsync(
+                deviceId,
+                context.UserId, // In this case, userId is the device ID
+                "OSQuery execution",
+                success,
+                errorMessage);
+
+            // Forward result to all users in the tenant
+            await _userHubContext.Clients
+                .Group($"tenant:{context.TenantId}")
+                .SendAsync(HubMethodNames.DeviceToUser.ReceiveOSQueryResult, new
+                {
+                    DeviceId = deviceId,
+                    ExecutionId = executionId,
+                    Success = success,
+                    ErrorMessage = errorMessage,
+                    RawJson = rawJson,
+                    ExecutionTimeMs = executionTimeMs,
+                    RowCount = rowCount,
+                    Timestamp = DateTimeOffset.UtcNow
+                });
+
+            _logger.LogInformation(
+                "OSQuery result for execution {ExecutionId} forwarded to tenant {TenantId}",
+                executionId, context.TenantId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to process OSQuery result from device {DeviceId} for execution {ExecutionId}",
+                deviceId, executionId);
+            throw;
+        }
     }
 }

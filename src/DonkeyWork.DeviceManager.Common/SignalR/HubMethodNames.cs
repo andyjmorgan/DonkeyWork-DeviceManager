@@ -25,6 +25,11 @@ public static class HubMethodNames
         /// Restart command - device should restart
         /// </summary>
         public const string ReceiveRestartCommand = "ReceiveRestartCommand";
+
+        /// <summary>
+        /// OSQuery command - device should execute query and return results
+        /// </summary>
+        public const string ReceiveOSQueryCommand = "ReceiveOSQueryCommand";
     }
 
     /// <summary>
@@ -46,6 +51,11 @@ public static class HubMethodNames
         /// Device status change notification (online/offline)
         /// </summary>
         public const string ReceiveDeviceStatus = "ReceiveDeviceStatus";
+
+        /// <summary>
+        /// OSQuery result from device
+        /// </summary>
+        public const string ReceiveOSQueryResult = "ReceiveOSQueryResult";
     }
 
     /// <summary>
@@ -72,5 +82,10 @@ public static class HubMethodNames
         /// Device pings the server (test connection)
         /// </summary>
         public const string Ping = "Ping";
+
+        /// <summary>
+        /// Device sends OSQuery result to server
+        /// </summary>
+        public const string SendOSQueryResult = "SendOSQueryResult";
     }
 }

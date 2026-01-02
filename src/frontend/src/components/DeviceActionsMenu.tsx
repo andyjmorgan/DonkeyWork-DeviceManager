@@ -8,6 +8,7 @@ interface DeviceActionsMenuProps {
   device: DeviceResponse;
   onEditDescription: (device: DeviceResponse) => void;
   onPing: (deviceId: string, deviceName: string) => void;
+  onRunOSQuery: (device: DeviceResponse) => void;
   onRestart: (deviceId: string, deviceName: string) => void;
   onShutdown: (deviceId: string, deviceName: string) => void;
   onDelete: (device: DeviceResponse) => void;
@@ -17,6 +18,7 @@ function DeviceActionsMenu({
   device,
   onEditDescription,
   onPing,
+  onRunOSQuery,
   onRestart,
   onShutdown,
   onDelete,
@@ -37,6 +39,11 @@ function DeviceActionsMenu({
       icon: 'pi pi-wifi',
       command: () => onPing(device.id, device.name),
       disabled: !device.online,
+    },
+    {
+      label: 'Run OSQuery',
+      icon: 'pi pi-search',
+      command: () => onRunOSQuery(device),
     },
     {
       label: 'Restart',

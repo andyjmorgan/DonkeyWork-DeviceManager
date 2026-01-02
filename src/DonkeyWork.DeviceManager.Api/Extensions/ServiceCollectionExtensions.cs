@@ -148,6 +148,12 @@ public static class ServiceCollectionExtensions
         // Register organization service (buildings and rooms)
         services.AddScoped<IOrganizationService, OrganizationService>();
 
+        // Register OSQuery service
+        services.AddScoped<IOSQueryService, OSQueryService>();
+
+        // Register device audit service
+        services.AddScoped<IDeviceAuditService, DeviceAuditService>();
+
         return services;
     }
 

@@ -3,6 +3,7 @@ using System;
 using DonkeyWork.DeviceManager.Persistence.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DonkeyWork.DeviceManager.Persistence.Migrations
 {
     [DbContext(typeof(DeviceManagerContext))]
-    partial class DeviceManagerContextModelSnapshot : ModelSnapshot
+    [Migration("20260102232707_AddOSQueryAndAuditTables")]
+    partial class AddOSQueryAndAuditTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

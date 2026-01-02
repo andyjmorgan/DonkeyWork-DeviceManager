@@ -40,3 +40,14 @@ public record CommandAcknowledgmentData
     public string? Message { get; init; }
     public DateTimeOffset Timestamp { get; init; }
 }
+
+/// <summary>
+/// Data structure for OSQuery commands sent to devices.
+/// </summary>
+public record OSQueryCommandData
+{
+    public Guid ExecutionId { get; init; }
+    public string Query { get; init; } = string.Empty;
+    public DateTimeOffset Timestamp { get; init; }
+    public Guid RequestedBy { get; init; }
+}

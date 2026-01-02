@@ -5,6 +5,7 @@ import Callback from './components/Callback';
 import Dashboard from './components/Dashboard';
 import Buildings from './pages/Buildings';
 import Rooms from './pages/Rooms';
+import OSQuery from './pages/OSQuery';
 import Layout from './components/Layout/Layout';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { authenticatedFetch } from './utils/apiClient';
@@ -72,6 +73,7 @@ function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/buildings" element={<Buildings />} />
                 <Route path="/rooms" element={<Rooms />} />
+                <Route path="/osquery" element={<OSQuery />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>

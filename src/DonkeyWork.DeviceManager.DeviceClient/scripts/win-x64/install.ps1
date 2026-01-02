@@ -165,6 +165,16 @@ if ($LASTEXITCODE -ne 0) {
 # Set service description
 sc.exe description $ServiceName "$Description"
 
+# Set the working directory for the service (so it reads appsettings.json from the correct location)
+Write-Host "Setting service working directory to: $InstallPath" -ForegroundColor Yellow
+$registryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
+if (Test-Path $registryPath) {
+    Set-ItemProperty -Path $registryPath -Name "ImagePath" -Value "`"$exePath`" --contentRoot `"$InstallPath`""
+    Write-Host "Working directory configured" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: Could not set working directory in registry" -ForegroundColor Yellow
+}
+
 # Configure service recovery options (restart on failure)
 sc.exe failure $ServiceName reset= 86400 actions= restart/60000/restart/60000/restart/60000
 

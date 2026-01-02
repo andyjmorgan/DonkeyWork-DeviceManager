@@ -170,6 +170,25 @@ cp -r "$PACKAGE_DIR"/* "$INSTALL_PATH/"
 rm -rf "$INSTALL_PATH/scripts"
 chmod +x "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient"
 
+# Grant CAP_SYS_BOOT capability for system restart/shutdown
+echo -e "${YELLOW}Granting system control capabilities (restart & shutdown)...${NC}"
+if command -v setcap &> /dev/null; then
+    setcap cap_sys_boot+ep "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient" 2>/dev/null || {
+        echo -e "${YELLOW}WARNING: Could not set CAP_SYS_BOOT capability.${NC}"
+        echo -e "${YELLOW}System restart and shutdown commands will not work.${NC}"
+    }
+
+    # Verify capability was set
+    if getcap "$INSTALL_PATH/DonkeyWork.DeviceManager.DeviceClient" | grep -q "cap_sys_boot"; then
+        echo -e "${GREEN}Capabilities granted: restart and shutdown enabled${NC}"
+    else
+        echo -e "${YELLOW}WARNING: Capability verification failed.${NC}"
+    fi
+else
+    echo -e "${YELLOW}WARNING: setcap not available.${NC}"
+    echo -e "${YELLOW}Install libcap (Rocky/RHEL: dnf install libcap) to enable restart/shutdown.${NC}"
+fi
+
 # Update API URL in appsettings.json if specified
 if [ "$API_BASE_URL" != "https://devicemanager.donkeywork.dev" ]; then
     echo -e "${YELLOW}[6/7] Updating API URL in configuration...${NC}"

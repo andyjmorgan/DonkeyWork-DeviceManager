@@ -1,0 +1,301 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  version:
+    name: Generate Version
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      version: ${{ steps.generate_version.outputs.version }}
+      tag: ${{ steps.generate_version.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Version
+        id: generate_version
+        run: |
+          # Get latest tag or default to v0.0.0
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Extract version numbers
+          VERSION_WITHOUT_V=$(echo $LATEST_TAG | sed 's/^v//')
+          MAJOR=$(echo $VERSION_WITHOUT_V | cut -d. -f1)
+          MINOR=$(echo $VERSION_WITHOUT_V | cut -d. -f2)
+          PATCH=$(echo $VERSION_WITHOUT_V | cut -d. -f3)
+
+          # Auto-increment patch
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          NEW_TAG="v${NEW_VERSION}"
+
+          echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${NEW_TAG}"
+
+      - name: Create and Push Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.generate_version.outputs.tag }}
+          git push origin ${{ steps.generate_version.outputs.tag }}
+
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore Dependencies
+        run: dotnet restore DonkeyWork.DeviceManager.sln
+
+      - name: Build Solution
+        run: dotnet build DonkeyWork.DeviceManager.sln --configuration Release --no-restore
+
+      - name: Run Tests
+        run: |
+          if [ -d "test" ] && [ "$(find test -name '*.csproj' 2>/dev/null | wc -l)" -gt 0 ]; then
+            dotnet test DonkeyWork.DeviceManager.sln --configuration Release --no-build --verbosity normal
+          else
+            echo "No test projects found, skipping tests"
+          fi
+
+  build-api:
+    name: Build API
+    needs: [version, build-and-test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Publish API
+        run: |
+          dotnet publish src/DonkeyWork.DeviceManager.Api/DonkeyWork.DeviceManager.Api.csproj \
+            --configuration Release \
+            --output ./publish/api \
+            /p:Version=${{ needs.version.outputs.version }}
+
+      - name: Package API
+        run: |
+          cd ./publish/api
+          zip -r ../../DonkeyWorkDeviceManager-API-v${{ needs.version.outputs.version }}.zip .
+
+      - name: Upload API Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-package
+          path: DonkeyWorkDeviceManager-API-v${{ needs.version.outputs.version }}.zip
+          retention-days: 90
+
+  build-client:
+    name: Build DeviceClient
+    needs: [version, build-and-test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    strategy:
+      matrix:
+        include:
+          - runtime: win-x64
+            script-path: scripts/win-x64
+            platform-name: Windows
+          - runtime: linux-x64
+            script-path: scripts/linux-x64
+            platform-name: Linux
+          - runtime: osx-arm64
+            script-path: scripts/osx-arm64
+            platform-name: macOS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Publish DeviceClient
+        run: |
+          dotnet publish src/DonkeyWork.DeviceManager.DeviceClient/DonkeyWork.DeviceManager.DeviceClient.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.runtime }} \
+            --self-contained true \
+            --output ./publish/${{ matrix.runtime }} \
+            /p:PublishSingleFile=false \
+            /p:PublishTrimmed=false \
+            /p:Version=${{ needs.version.outputs.version }}
+
+      - name: Copy Install Scripts
+        run: |
+          mkdir -p ./publish/${{ matrix.runtime }}/scripts
+          cp -r src/DonkeyWork.DeviceManager.DeviceClient/${{ matrix.script-path }}/* \
+            ./publish/${{ matrix.runtime }}/scripts/
+
+          # Copy README if it exists
+          if [ -f "src/DonkeyWork.DeviceManager.DeviceClient/README.md" ]; then
+            cp src/DonkeyWork.DeviceManager.DeviceClient/README.md \
+              ./publish/${{ matrix.runtime }}/INSTALLATION.md
+          fi
+
+      - name: Package DeviceClient
+        run: |
+          cd ./publish/${{ matrix.runtime }}
+          zip -r ../../DonkeyWorkDeviceManager-DeviceClient-${{ matrix.platform-name }}-v${{ needs.version.outputs.version }}.zip .
+
+      - name: Upload Client Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-${{ matrix.runtime }}
+          path: DonkeyWorkDeviceManager-DeviceClient-${{ matrix.platform-name }}-v${{ needs.version.outputs.version }}.zip
+          retention-days: 90
+
+  create-release:
+    name: Create GitHub Release
+    needs: [version, build-api, build-client]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: List Downloaded Artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find ./artifacts -type f -name "*.zip" -exec ls -lh {} \;
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"- %s (%h)" ${LAST_TAG}..HEAD)
+          fi
+
+          cat > release_notes.md << EOF
+          ## What's Changed
+
+          ${COMMITS}
+
+          ## Downloads
+
+          ### Backend API
+          - **API Package**: DonkeyWorkDeviceManager-API-v${{ needs.version.outputs.version }}.zip
+
+          ### Device Client
+          - **Windows (x64)**: DonkeyWorkDeviceManager-DeviceClient-Windows-v${{ needs.version.outputs.version }}.zip
+          - **Linux (x64)**: DonkeyWorkDeviceManager-DeviceClient-Linux-v${{ needs.version.outputs.version }}.zip
+          - **macOS (ARM64)**: DonkeyWorkDeviceManager-DeviceClient-macOS-v${{ needs.version.outputs.version }}.zip
+
+          ## Installation
+
+          Each device client package includes installation scripts. See INSTALLATION.md in the package for detailed instructions.
+
+          ### Quick Install
+
+          **Windows:**
+          \`\`\`powershell
+          # Extract zip, then run as Administrator:
+          .\scripts\install.ps1
+          \`\`\`
+
+          **Linux:**
+          \`\`\`bash
+          # Extract zip, then run:
+          sudo ./scripts/install.sh
+          \`\`\`
+
+          **macOS:**
+          \`\`\`bash
+          # Extract zip, then run:
+          sudo ./scripts/install.sh
+          \`\`\`
+          EOF
+
+          if [ -n "$LAST_TAG" ]; then
+            echo "" >> release_notes.md
+            echo "## Full Changelog" >> release_notes.md
+            echo "${{ github.server_url }}/${{ github.repository }}/compare/${LAST_TAG}...${{ needs.version.outputs.tag }}" >> release_notes.md
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Release ${{ needs.version.outputs.tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/api-package/*.zip
+            artifacts/client-win-x64/*.zip
+            artifacts/client-linux-x64/*.zip
+            artifacts/client-osx-arm64/*.zip

@@ -130,7 +130,7 @@ public class DeviceHub : Hub
     }
 
     /// <summary>
-    /// Device reports its status.
+    /// Device reports its status (for future use).
     /// </summary>
     public async Task ReportStatus(string status)
     {
@@ -141,138 +141,15 @@ public class DeviceHub : Hub
         _logger.LogInformation("Device status report - DeviceUserId: {DeviceUserId}, TenantId: {TenantId}, Status: {Status}, RequestId: {RequestId}",
             context.UserId, context.TenantId, status, context.RequestId);
 
-        // Here you could update device status in database
-        // Any database queries here will automatically be filtered by tenant
-        await Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Device sends a ping response back to users.
-    /// </summary>
-    /// <param name="commandId">The command ID being responded to</param>
-    /// <param name="latencyMs">The response latency in milliseconds</param>
-    public async Task SendPingResponse(Guid commandId, int latencyMs)
-    {
-        // Populate RequestContext from Hub's ClaimsPrincipal
-        var context = _requestContextProvider.Context;
-        context.PopulateFromPrincipal(Context.User, _logger);
-
-        _logger.LogInformation(
-            "Device {DeviceId} sent ping response for command {CommandId} with latency {LatencyMs}ms",
-            context.UserId, commandId, latencyMs);
-
-        // Forward response to all users in the tenant using strongly-typed interface
+        // Broadcast status to all users in tenant
         await _userHubContext.Clients
             .Group($"tenant:{context.TenantId}")
-            .ReceivePingResponse(new PingResponse
+            .ReceiveDeviceStatus(new DeviceStatus
             {
                 DeviceId = context.UserId,
-                CommandId = commandId,
-                LatencyMs = latencyMs,
-                Timestamp = DateTimeOffset.UtcNow
+                IsOnline = true,
+                Timestamp = DateTimeOffset.UtcNow,
+                Reason = status
             });
-    }
-
-    /// <summary>
-    /// Device acknowledges a command (shutdown, restart, etc).
-    /// </summary>
-    /// <param name="commandId">The command ID being acknowledged</param>
-    /// <param name="commandType">The type of command (shutdown, restart, etc)</param>
-    /// <param name="success">Whether the command was executed successfully</param>
-    /// <param name="message">Optional message or error details</param>
-    public async Task AcknowledgeCommand(Guid commandId, string commandType, bool success, string? message = null)
-    {
-        // Populate RequestContext from Hub's ClaimsPrincipal
-        var context = _requestContextProvider.Context;
-        context.PopulateFromPrincipal(Context.User, _logger);
-
-        _logger.LogInformation(
-            "Device {DeviceId} acknowledged {CommandType} command {CommandId} - Success: {Success}, Message: {Message}",
-            context.UserId, commandType, commandId, success, message);
-
-        // Forward acknowledgment to all users in the tenant using strongly-typed interface
-        await _userHubContext.Clients
-            .Group($"tenant:{context.TenantId}")
-            .ReceiveCommandAcknowledgment(new CommandAcknowledgment
-            {
-                DeviceId = context.UserId,
-                CommandId = commandId,
-                CommandType = commandType,
-                Success = success,
-                Message = message,
-                Timestamp = DateTimeOffset.UtcNow
-            });
-    }
-
-    /// <summary>
-    /// Device sends OSQuery result back to users.
-    /// </summary>
-    /// <param name="executionId">The execution ID</param>
-    /// <param name="success">Whether the query executed successfully</param>
-    /// <param name="errorMessage">Error message if query failed</param>
-    /// <param name="rawJson">The JSON result from osquery</param>
-    /// <param name="executionTimeMs">Execution time in milliseconds</param>
-    /// <param name="rowCount">Number of rows returned</param>
-    public async Task SendOSQueryResult(Guid executionId, bool success, string? errorMessage, string? rawJson, int executionTimeMs, int rowCount)
-    {
-        // Populate RequestContext from Hub's ClaimsPrincipal
-        var context = _requestContextProvider.Context;
-        context.PopulateFromPrincipal(Context.User, _logger);
-
-        var deviceId = context.UserId;
-
-        _logger.LogInformation(
-            "Device {DeviceId} sent OSQuery result for execution {ExecutionId} - Success: {Success}, Rows: {RowCount}, Time: {ExecutionTimeMs}ms",
-            deviceId, executionId, success, rowCount, executionTimeMs);
-
-        try
-        {
-            // Save result to database
-            await _osqueryService.SaveExecutionResultAsync(
-                executionId,
-                deviceId,
-                success,
-                errorMessage,
-                rawJson,
-                executionTimeMs,
-                rowCount);
-
-            // Update execution counts
-            await _osqueryService.UpdateExecutionCountsAsync(executionId);
-
-            // Log OSQuery execution to audit trail
-            await _auditService.LogOSQueryAsync(
-                deviceId,
-                context.UserId, // In this case, userId is the device ID
-                "OSQuery execution",
-                success,
-                errorMessage);
-
-            // Forward result to all users in the tenant using strongly-typed interface
-            await _userHubContext.Clients
-                .Group($"tenant:{context.TenantId}")
-                .ReceiveOSQueryResult(new OSQueryResult
-                {
-                    DeviceId = deviceId,
-                    ExecutionId = executionId,
-                    Success = success,
-                    ErrorMessage = errorMessage,
-                    RawJson = rawJson,
-                    ExecutionTimeMs = executionTimeMs,
-                    RowCount = rowCount,
-                    Timestamp = DateTimeOffset.UtcNow
-                });
-
-            _logger.LogInformation(
-                "OSQuery result for execution {ExecutionId} forwarded to tenant {TenantId}",
-                executionId, context.TenantId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Failed to process OSQuery result from device {DeviceId} for execution {ExecutionId}",
-                deviceId, executionId);
-            throw;
-        }
     }
 }

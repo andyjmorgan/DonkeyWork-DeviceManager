@@ -1,27 +1,31 @@
 # SignalR Hub Patterns
 
-This document describes the SignalR communication patterns used in DonkeyWork DeviceManager.
+This document describes the modern SignalR communication patterns used in DonkeyWork DeviceManager.
 
 ## Overview
 
-The application uses SignalR for real-time bidirectional communication between:
+The application uses **only modern SignalR patterns** (request-response and streaming) for real-time bidirectional communication between:
 - **UserHub**: Frontend users (web browsers) connect here
 - **DeviceHub**: Device clients connect here
 - **DeviceRegistrationHub**: Unauthenticated devices connect for initial registration
+
+**No legacy fire-and-forget patterns** - all communication uses awaitable request-response or efficient streaming.
 
 ## Architecture
 
 ### Strongly-Typed Client Interfaces
 
-We use strongly-typed client interfaces for compile-time safety and better IDE support:
+We use strongly-typed client interfaces for compile-time safety and IntelliSense support:
 
 **IDeviceClient** (`src/DonkeyWork.DeviceManager.Api/Hubs/IDeviceClient.cs`):
 - Defines methods that can be invoked on device clients
-- Used by UserHub to send commands to devices
+- Used by UserHub via `IHubContext<DeviceHub, IDeviceClient>`
+- All methods return `Task<T>` or `IAsyncEnumerable<T>`
 
 **IUserClient** (`src/DonkeyWork.DeviceManager.Api/Hubs/IUserClient.cs`):
 - Defines methods that can be invoked on user clients (web browsers)
-- Used by DeviceHub to send notifications to users
+- Used by DeviceHub via `IHubContext<UserHub, IUserClient>`
+- Used for broadcasting status notifications to all users
 
 ### Hub Configuration
 
@@ -41,15 +45,15 @@ builder.Services.AddSignalR(hubOptions =>
 
 ## Communication Patterns
 
-### 1. Request-Response Pattern (New)
+### 1. Request-Response Pattern
 
-The request-response pattern allows hubs to invoke methods on clients and await their responses. This eliminates manual command correlation with GUIDs.
+The request-response pattern allows hubs to invoke methods on clients and await their responses. No manual command correlation needed.
 
 #### Example: Ping Device
 
 **UserHub** (server-side):
 ```csharp
-public async Task<int?> PingDeviceWithResponse(Guid deviceId, int timeoutSeconds = 30)
+public async Task<int?> PingDevice(Guid deviceId, int timeoutSeconds = 30)
 {
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
 
@@ -62,9 +66,9 @@ public async Task<int?> PingDeviceWithResponse(Guid deviceId, int timeoutSeconds
 
 **Device Client** (client-side):
 ```csharp
-// Device client must implement a handler that returns a value
+// Device client implements a handler that returns a value
 hubConnection.On<Guid, DateTimeOffset, Guid, int>("MeasurePing",
-    async (commandId, timestamp, requestedBy) =>
+    (commandId, timestamp, requestedBy) =>
 {
     var startTime = Stopwatch.GetTimestamp();
     // Perform ping measurement
@@ -78,16 +82,17 @@ hubConnection.On<Guid, DateTimeOffset, Guid, int>("MeasurePing",
 - Built-in timeout support via CancellationToken
 - Exceptions propagate from client to server
 - Type-safe with generics
+- Direct return values to caller
 
 #### Available Request-Response Methods
 
-| Method | Hub | Returns | Timeout |
-|--------|-----|---------|---------|
-| `PingDeviceWithResponse` | UserHub | `int?` (latency ms) | 30s |
-| `ShutdownDeviceWithResponse` | UserHub | `CommandResult?` | 30s |
-| `RestartDeviceWithResponse` | UserHub | `CommandResult?` | 30s |
+| Method | Hub | Parameters | Returns | Timeout |
+|--------|-----|------------|---------|---------|
+| `PingDevice` | UserHub | deviceId, timeoutSeconds? | `int?` (latency ms) | 30s |
+| `ShutdownDevice` | UserHub | deviceId, timeoutSeconds? | `CommandResult?` | 30s |
+| `RestartDevice` | UserHub | deviceId, timeoutSeconds? | `CommandResult?` | 30s |
 
-### 2. Streaming Pattern (New)
+### 2. Streaming Pattern
 
 The streaming pattern allows efficient handling of large datasets by sending data incrementally rather than buffering entire results.
 
@@ -95,7 +100,7 @@ The streaming pattern allows efficient handling of large datasets by sending dat
 
 **UserHub** (server-side):
 ```csharp
-public async IAsyncEnumerable<OSQueryResultRow> ExecuteStreamingOSQuery(Guid deviceId, string query)
+public async IAsyncEnumerable<OSQueryResultRow> ExecuteOSQuery(Guid deviceId, string query)
 {
     var resultStream = _deviceHubContext.Clients.User(deviceId.ToString())
         .StreamAsync<OSQueryResultRow>("ExecuteStreamingOSQuery",
@@ -137,118 +142,73 @@ private async IAsyncEnumerable<OSQueryResultRow> ExecuteQueryStreamAsync(string 
 - Progressive rendering - users see results as they arrive
 - Cancellation support - can cancel mid-stream
 - Backpressure handling - producer waits if consumer is slow
-
-### 3. Fire-and-Forget Pattern (Legacy)
-
-The legacy pattern uses one-way messaging with manual command correlation. Still supported for backward compatibility.
-
-#### Example: Ping Device (Legacy)
-
-**UserHub**:
-```csharp
-public async Task PingDevice(Guid deviceId)
-{
-    var commandId = Guid.NewGuid();
-
-    await _deviceHubContext.Clients.User(deviceId.ToString())
-        .ReceivePingCommand(new
-        {
-            CommandId = commandId,
-            Timestamp = DateTimeOffset.UtcNow,
-            RequestedBy = userId
-        });
-}
-```
-
-**DeviceHub**:
-```csharp
-public async Task SendPingResponse(Guid commandId, int latencyMs)
-{
-    await _userHubContext.Clients.Group($"tenant:{tenantId}")
-        .ReceivePingResponse(new PingResponse
-        {
-            CommandId = commandId,
-            LatencyMs = latencyMs,
-            Timestamp = DateTimeOffset.UtcNow
-        });
-}
-```
-
-**Device Client**:
-```csharp
-hubConnection.On<object>("ReceivePingCommand", async (commandData) =>
-{
-    var commandId = commandData.CommandId;
-    var latency = MeasurePing();
-
-    await hubConnection.InvokeAsync("SendPingResponse", commandId, latency);
-});
-```
-
-**Drawbacks**:
-- Manual command ID correlation
-- No built-in timeout mechanism
-- Requires separate send and receive methods
-- More complex error handling
-
-## Migration Strategy
-
-New implementations should use request-response or streaming patterns. Legacy methods remain for backward compatibility:
-
-1. **Phase 1** (Current): Both patterns coexist
-   - New methods: `*WithResponse`, `ExecuteStreaming*`
-   - Legacy methods: `PingDevice`, `ShutdownDevice`, etc.
-
-2. **Phase 2**: Update device clients to support new patterns
-   - Implement `MeasurePing()`, `ExecuteShutdown()`, etc.
-   - Keep legacy handlers for backward compatibility
-
-3. **Phase 3**: Update frontend to use new patterns
-   - Switch API calls to new methods
-   - Remove legacy method calls
-
-4. **Phase 4**: Deprecate legacy methods
-   - Mark legacy methods as `[Obsolete]`
-   - Remove after transition period
+- Perfect for large query results or log tailing
 
 ## Client Implementation Guide
 
 ### Device Client Requirements
 
-Device clients must implement handlers for both patterns:
+Device clients must implement handlers for request-response and streaming patterns:
 
 ```csharp
-// Request-response handlers (return values)
-hubConnection.On<Guid, DateTimeOffset, Guid, int>("MeasurePing", ...);
-hubConnection.On<Guid, DateTimeOffset, Guid, CommandResult>("ExecuteShutdown", ...);
-hubConnection.On<Guid, DateTimeOffset, Guid, CommandResult>("ExecuteRestart", ...);
+// Request-response handlers (return values directly)
+hubConnection.On<Guid, DateTimeOffset, Guid, int>("MeasurePing",
+    (commandId, timestamp, requestedBy) =>
+{
+    // Measure and return latency
+    return MeasurePingLatency();
+});
+
+hubConnection.On<Guid, DateTimeOffset, Guid, CommandResult>("ExecuteShutdown",
+    (commandId, timestamp, requestedBy) =>
+{
+    // Execute shutdown and return result
+    return ExecuteShutdownCommand();
+});
+
+hubConnection.On<Guid, DateTimeOffset, Guid, CommandResult>("ExecuteRestart",
+    (commandId, timestamp, requestedBy) =>
+{
+    // Execute restart and return result
+    return ExecuteRestartCommand();
+});
 
 // Streaming handlers (return IAsyncEnumerable)
 hubConnection.On<Guid, string, DateTimeOffset, Guid, IAsyncEnumerable<OSQueryResultRow>>(
-    "ExecuteStreamingOSQuery", ...);
-
-// Legacy handlers (fire-and-forget)
-hubConnection.On<object>("ReceivePingCommand", ...);
-hubConnection.On<object>("ReceiveShutdownCommand", ...);
-hubConnection.On<object>("ReceiveRestartCommand", ...);
-hubConnection.On<object>("ReceiveOSQueryCommand", ...);
+    "ExecuteStreamingOSQuery",
+    (executionId, query, timestamp, requestedBy) =>
+{
+    return ExecuteOSQueryStream(query);
+});
 ```
 
 ### User Client (Browser) Requirements
 
-Browsers receive notifications from devices:
+Browsers receive status notifications from devices:
 
 ```javascript
-connection.on("ReceivePingResponse", (response) => {
-    console.log(`Device ${response.deviceId} latency: ${response.latencyMs}ms`);
+// Connect to UserHub
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/hubs/user")
+    .build();
+
+// Receive device status updates
+connection.on("ReceiveDeviceStatus", (status) => {
+    console.log(`Device ${status.deviceId} is ${status.isOnline ? 'online' : 'offline'}`);
 });
 
-connection.on("ReceiveCommandAcknowledgment", (ack) => {
-    console.log(`Command ${ack.commandType}: ${ack.success ? 'success' : 'failed'}`);
-});
+await connection.start();
 
-connection.on("ReceiveOSQueryResult", (result) => {
-    console.log(`Query ${result.executionId}: ${result.rowCount} rows`);
+// Invoke request-response methods
+const latency = await connection.invoke("PingDevice", deviceId, 30);
+console.log(`Device latency: ${latency}ms`);
+
+// Invoke streaming methods
+const stream = connection.stream("ExecuteOSQuery", deviceId, "SELECT * FROM processes");
+stream.subscribe({
+    next: (row) => console.log("Row:", row),
+    complete: () => console.log("Query complete"),
+    error: (err) => console.error("Error:", err)
 });
 ```
 
@@ -296,23 +256,93 @@ await foreach (var row in resultStream)
 ## Performance Considerations
 
 ### Request-Response
-- Minimal overhead vs fire-and-forget
+- Minimal overhead vs fire-and-forget (< 1ms additional latency)
 - Timeout values should be tuned based on expected latency
-- Consider connection pool limits when many requests are in flight
+- Connection pool limits matter when many requests are in flight
+- Supports up to 10 parallel invocations per client (configurable)
 
 ### Streaming
 - Much more efficient than buffering for large datasets
-- Memory usage is proportional to backpressure, not dataset size
-- Cancellation tokens should be passed through the entire pipeline
+- Memory usage proportional to backpressure, not dataset size
+- Cancellation tokens should be passed through entire pipeline
 - Consider chunking/batching for very high-frequency data
+- No memory overhead for million-row datasets
 
-### Fire-and-Forget
-- Lowest latency for simple notifications
-- No built-in confirmation of delivery
-- Manual correlation adds complexity but no performance overhead
+## Type Definitions
+
+### CommandResult
+```csharp
+public class CommandResult
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public DateTimeOffset Timestamp { get; set; }
+}
+```
+
+### OSQueryResultRow
+```csharp
+public class OSQueryResultRow
+{
+    public string RowJson { get; set; }
+    public int RowNumber { get; set; }
+}
+```
+
+### DeviceStatus
+```csharp
+public class DeviceStatus
+{
+    public Guid DeviceId { get; set; }
+    public bool IsOnline { get; set; }
+    public DateTimeOffset Timestamp { get; set; }
+    public string? Reason { get; set; }
+}
+```
+
+## Comparison with Legacy Patterns
+
+| Aspect | Old Fire-and-Forget | New Request-Response & Streaming |
+|--------|---------------------|----------------------------------|
+| **Command Correlation** | Manual GUID tracking | Automatic framework correlation |
+| **Type Safety** | String-based method names | Strongly-typed interfaces |
+| **Timeout Handling** | Manual implementation | Built-in CancellationToken support |
+| **Error Handling** | Manual success/error flags | Exception propagation |
+| **Large Data Sets** | Buffered in memory | Streamed incrementally |
+| **API Complexity** | Separate send/receive pairs | Single awaitable methods |
+| **Memory Efficiency** | High for large payloads | Constant, independent of size |
+| **User Experience** | Wait for complete result | Progressive rendering |
+
+## Migration from Legacy Code
+
+If you have existing device clients using the old pattern, they need to be updated:
+
+### Before (Legacy - DO NOT USE):
+```csharp
+// Old fire-and-forget handler
+hubConnection.On<object>("ReceivePingCommand", async (commandData) =>
+{
+    var commandId = commandData.CommandId;
+    var latency = MeasurePing();
+
+    // Manual response send
+    await hubConnection.InvokeAsync("SendPingResponse", commandId, latency);
+});
+```
+
+### After (Modern):
+```csharp
+// New request-response handler
+hubConnection.On<Guid, DateTimeOffset, Guid, int>("MeasurePing",
+    (commandId, timestamp, requestedBy) =>
+{
+    return MeasurePing(); // Direct return, no separate send
+});
+```
 
 ## References
 
 - [ASP.NET Core SignalR Hubs](https://learn.microsoft.com/en-us/aspnet/core/signalr/hubs)
 - [SignalR Streaming](https://learn.microsoft.com/en-us/aspnet/core/signalr/streaming)
 - [SignalR Client Results (ASP.NET Core 7.0+)](https://devblogs.microsoft.com/dotnet/asp-net-core-updates-in-dotnet-7-preview-4/#signalr-client-results)
+- [IAsyncEnumerable in C#](https://learn.microsoft.com/en-us/dotnet/csharp/whats-new/tutorials/generate-consume-asynchronous-stream)

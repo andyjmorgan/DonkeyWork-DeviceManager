@@ -1,10 +1,9 @@
 namespace DonkeyWork.DeviceManager.Api.Hubs;
 
-using DonkeyWork.DeviceManager.Common.Models;
-
 /// <summary>
 /// Strongly-typed interface for methods that can be invoked on device clients.
 /// Used by UserHub to send commands and request responses from devices.
+/// All methods use modern SignalR patterns (request-response or streaming).
 /// </summary>
 public interface IDeviceClient
 {
@@ -45,30 +44,6 @@ public interface IDeviceClient
     /// <param name="requestedBy">User ID who requested the query</param>
     /// <returns>Async stream of query result rows</returns>
     IAsyncEnumerable<OSQueryResultRow> ExecuteStreamingOSQuery(Guid executionId, string query, DateTimeOffset timestamp, Guid requestedBy);
-
-    /// <summary>
-    /// Legacy method: Sends a ping command to device (fire-and-forget).
-    /// Consider migrating to MeasurePing for request-response pattern.
-    /// </summary>
-    Task ReceivePingCommand(object commandData);
-
-    /// <summary>
-    /// Legacy method: Sends a shutdown command to device (fire-and-forget).
-    /// Consider migrating to ExecuteShutdown for request-response pattern.
-    /// </summary>
-    Task ReceiveShutdownCommand(object commandData);
-
-    /// <summary>
-    /// Legacy method: Sends a restart command to device (fire-and-forget).
-    /// Consider migrating to ExecuteRestart for request-response pattern.
-    /// </summary>
-    Task ReceiveRestartCommand(object commandData);
-
-    /// <summary>
-    /// Legacy method: Sends an OSQuery command to device (fire-and-forget).
-    /// Consider migrating to ExecuteStreamingOSQuery for streaming pattern.
-    /// </summary>
-    Task ReceiveOSQueryCommand(object commandData);
 }
 
 /// <summary>

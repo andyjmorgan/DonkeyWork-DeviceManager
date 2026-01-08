@@ -39,7 +39,12 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, Donk
 
 // Configure SignalR with Redis backplane
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-builder.Services.AddSignalR()
+builder.Services.AddSignalR(hubOptions =>
+    {
+        // Enable request-response pattern: allows InvokeAsync from hub methods
+        // Required for client results and awaiting responses from clients
+        hubOptions.MaximumParallelInvocationsPerClient = 10;
+    })
     .AddStackExchangeRedis(redisConnectionString, options =>
     {
         options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("DeviceManager");

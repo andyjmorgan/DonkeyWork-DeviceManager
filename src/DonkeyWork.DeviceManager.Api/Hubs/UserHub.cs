@@ -10,20 +10,20 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// SignalR hub for frontend user connections.
 /// Users receive real-time notifications about device status changes
-/// and can send commands to devices.
+/// and can send commands to devices using request-response patterns.
 /// </summary>
 [Authorize(Policy = "UserOnly")]
 public class UserHub : Hub
 {
     private readonly IRequestContextProvider _requestContextProvider;
-    private readonly IHubContext<DeviceHub> _deviceHubContext;
+    private readonly IHubContext<DeviceHub, IDeviceClient> _deviceHubContext;
     private readonly IDeviceAuditService _auditService;
     private readonly IOSQueryService _osqueryService;
     private readonly ILogger<UserHub> _logger;
 
     public UserHub(
         IRequestContextProvider requestContextProvider,
-        IHubContext<DeviceHub> deviceHubContext,
+        IHubContext<DeviceHub, IDeviceClient> deviceHubContext,
         IDeviceAuditService auditService,
         IOSQueryService osqueryService,
         ILogger<UserHub> logger)
@@ -98,10 +98,10 @@ public class UserHub : Hub
             // Log command to audit trail
             await _auditService.LogCommandAsync(deviceId, "Ping", context.UserId);
 
-            // Send command to device's connection
+            // Send command to device's connection using strongly-typed interface
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
-                .SendAsync(HubMethodNames.UserToDevice.ReceivePingCommand, new
+                .ReceivePingCommand(new
                 {
                     CommandId = commandId,
                     Timestamp = DateTimeOffset.UtcNow,
@@ -142,10 +142,10 @@ public class UserHub : Hub
             // Log command to audit trail
             await _auditService.LogCommandAsync(deviceId, "Shutdown", context.UserId);
 
-            // Send command to device's connection
+            // Send command to device's connection using strongly-typed interface
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
-                .SendAsync(HubMethodNames.UserToDevice.ReceiveShutdownCommand, new
+                .ReceiveShutdownCommand(new
                 {
                     CommandId = commandId,
                     Timestamp = DateTimeOffset.UtcNow,
@@ -186,10 +186,10 @@ public class UserHub : Hub
             // Log command to audit trail
             await _auditService.LogCommandAsync(deviceId, "Restart", context.UserId);
 
-            // Send command to device's connection
+            // Send command to device's connection using strongly-typed interface
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
-                .SendAsync(HubMethodNames.UserToDevice.ReceiveRestartCommand, new
+                .ReceiveRestartCommand(new
                 {
                     CommandId = commandId,
                     Timestamp = DateTimeOffset.UtcNow,
@@ -227,10 +227,10 @@ public class UserHub : Hub
 
         try
         {
-            // Send command to device's connection
+            // Send command to device's connection using strongly-typed interface
             await _deviceHubContext.Clients
                 .User(deviceId.ToString())
-                .SendAsync(HubMethodNames.UserToDevice.ReceiveOSQueryCommand, new
+                .ReceiveOSQueryCommand(new
                 {
                     ExecutionId = executionId,
                     Query = query,
@@ -249,5 +249,200 @@ public class UserHub : Hub
                 deviceId);
             throw;
         }
+    }
+
+    // ==================== Request-Response Pattern Methods ====================
+    // These methods use the new SignalR client results feature to await responses
+
+    /// <summary>
+    /// Pings a device and awaits the latency measurement response.
+    /// Uses request-response pattern - no manual command correlation needed.
+    /// </summary>
+    /// <param name="deviceId">The device ID to ping</param>
+    /// <param name="timeoutSeconds">Timeout in seconds (default: 30)</param>
+    /// <returns>Latency in milliseconds, or null if device didn't respond in time</returns>
+    public async Task<int?> PingDeviceWithResponse(Guid deviceId, int timeoutSeconds = 30)
+    {
+        var context = _requestContextProvider.Context;
+        context.PopulateFromPrincipal(Context.User, _logger);
+
+        var commandId = Guid.NewGuid();
+
+        _logger.LogInformation(
+            "User {UserId} sending ping request {CommandId} to device {DeviceId} with timeout {TimeoutSeconds}s",
+            context.UserId, commandId, deviceId, timeoutSeconds);
+
+        try
+        {
+            // Log command to audit trail
+            await _auditService.LogCommandAsync(deviceId, "Ping", context.UserId);
+
+            // Use request-response pattern with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+            var latencyMs = await _deviceHubContext.Clients.User(deviceId.ToString())
+                .InvokeAsync<int>("MeasurePing", commandId, DateTimeOffset.UtcNow, context.UserId, cts.Token);
+
+            _logger.LogInformation(
+                "Device {DeviceId} responded to ping {CommandId} with latency {LatencyMs}ms",
+                deviceId, commandId, latencyMs);
+
+            return latencyMs;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning(
+                "Ping request {CommandId} to device {DeviceId} timed out after {TimeoutSeconds}s",
+                commandId, deviceId, timeoutSeconds);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to ping device {DeviceId}",
+                deviceId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Sends a shutdown command to a device and awaits the execution result.
+    /// Uses request-response pattern for immediate feedback.
+    /// </summary>
+    /// <param name="deviceId">The device ID to shutdown</param>
+    /// <param name="timeoutSeconds">Timeout in seconds (default: 30)</param>
+    /// <returns>Command execution result</returns>
+    public async Task<CommandResult?> ShutdownDeviceWithResponse(Guid deviceId, int timeoutSeconds = 30)
+    {
+        var context = _requestContextProvider.Context;
+        context.PopulateFromPrincipal(Context.User, _logger);
+
+        var commandId = Guid.NewGuid();
+
+        _logger.LogInformation(
+            "User {UserId} sending shutdown request {CommandId} to device {DeviceId}",
+            context.UserId, commandId, deviceId);
+
+        try
+        {
+            // Log command to audit trail
+            await _auditService.LogCommandAsync(deviceId, "Shutdown", context.UserId);
+
+            // Use request-response pattern with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+            var result = await _deviceHubContext.Clients.User(deviceId.ToString())
+                .InvokeAsync<CommandResult>("ExecuteShutdown", commandId, DateTimeOffset.UtcNow, context.UserId, cts.Token);
+
+            _logger.LogInformation(
+                "Device {DeviceId} responded to shutdown {CommandId} - Success: {Success}, Message: {Message}",
+                deviceId, commandId, result.Success, result.Message);
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning(
+                "Shutdown request {CommandId} to device {DeviceId} timed out after {TimeoutSeconds}s",
+                commandId, deviceId, timeoutSeconds);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to shutdown device {DeviceId}",
+                deviceId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Sends a restart command to a device and awaits the execution result.
+    /// Uses request-response pattern for immediate feedback.
+    /// </summary>
+    /// <param name="deviceId">The device ID to restart</param>
+    /// <param name="timeoutSeconds">Timeout in seconds (default: 30)</param>
+    /// <returns>Command execution result</returns>
+    public async Task<CommandResult?> RestartDeviceWithResponse(Guid deviceId, int timeoutSeconds = 30)
+    {
+        var context = _requestContextProvider.Context;
+        context.PopulateFromPrincipal(Context.User, _logger);
+
+        var commandId = Guid.NewGuid();
+
+        _logger.LogInformation(
+            "User {UserId} sending restart request {CommandId} to device {DeviceId}",
+            context.UserId, commandId, deviceId);
+
+        try
+        {
+            // Log command to audit trail
+            await _auditService.LogCommandAsync(deviceId, "Restart", context.UserId);
+
+            // Use request-response pattern with timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+            var result = await _deviceHubContext.Clients.User(deviceId.ToString())
+                .InvokeAsync<CommandResult>("ExecuteRestart", commandId, DateTimeOffset.UtcNow, context.UserId, cts.Token);
+
+            _logger.LogInformation(
+                "Device {DeviceId} responded to restart {CommandId} - Success: {Success}, Message: {Message}",
+                deviceId, commandId, result.Success, result.Message);
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning(
+                "Restart request {CommandId} to device {DeviceId} timed out after {TimeoutSeconds}s",
+                commandId, deviceId, timeoutSeconds);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to restart device {DeviceId}",
+                deviceId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Executes an OSQuery on a device and streams the results back.
+    /// Uses streaming pattern for efficient handling of large result sets.
+    /// </summary>
+    /// <param name="deviceId">The device ID to query</param>
+    /// <param name="query">The SQL query to execute</param>
+    /// <returns>Async stream of query result rows</returns>
+    public async IAsyncEnumerable<OSQueryResultRow> ExecuteStreamingOSQuery(Guid deviceId, string query)
+    {
+        var context = _requestContextProvider.Context;
+        context.PopulateFromPrincipal(Context.User, _logger);
+
+        var executionId = Guid.NewGuid();
+
+        _logger.LogInformation(
+            "User {UserId} sending streaming OSQuery {ExecutionId} to device {DeviceId}",
+            context.UserId, executionId, deviceId);
+
+        // Create streaming channel reader for results
+        var resultStream = _deviceHubContext.Clients.User(deviceId.ToString())
+            .StreamAsync<OSQueryResultRow>(
+                "ExecuteStreamingOSQuery",
+                executionId,
+                query,
+                DateTimeOffset.UtcNow,
+                context.UserId);
+
+        var rowCount = 0;
+        await foreach (var row in resultStream)
+        {
+            rowCount++;
+            yield return row;
+        }
+
+        _logger.LogInformation(
+            "Streaming OSQuery {ExecutionId} completed - {RowCount} rows received from device {DeviceId}",
+            executionId, rowCount, deviceId);
     }
 }

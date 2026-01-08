@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 /// SignalR hub for authenticated device communication.
 /// Devices must connect with a valid JWT token.
 /// Only devices (not users) can connect to this hub.
+/// Uses strongly-typed client interface for sending notifications to users.
 /// </summary>
 [Authorize(Policy = AuthorizationPolicies.DeviceOnly)]
 public class DeviceHub : Hub
@@ -21,7 +22,7 @@ public class DeviceHub : Hub
     private readonly DeviceManagerContext _dbContext;
     private readonly IRequestContextProvider _requestContextProvider;
     private readonly IHubActivityChannel _activityChannel;
-    private readonly IHubContext<UserHub> _userHubContext;
+    private readonly IHubContext<UserHub, IUserClient> _userHubContext;
     private readonly IOSQueryService _osqueryService;
     private readonly IDeviceAuditService _auditService;
     private readonly ILogger<DeviceHub> _logger;
@@ -30,7 +31,7 @@ public class DeviceHub : Hub
         DeviceManagerContext dbContext,
         IRequestContextProvider requestContextProvider,
         IHubActivityChannel activityChannel,
-        IHubContext<UserHub> userHubContext,
+        IHubContext<UserHub, IUserClient> userHubContext,
         IOSQueryService osqueryService,
         IDeviceAuditService auditService,
         ILogger<DeviceHub> logger)
@@ -160,10 +161,10 @@ public class DeviceHub : Hub
             "Device {DeviceId} sent ping response for command {CommandId} with latency {LatencyMs}ms",
             context.UserId, commandId, latencyMs);
 
-        // Forward response to all users in the tenant
+        // Forward response to all users in the tenant using strongly-typed interface
         await _userHubContext.Clients
             .Group($"tenant:{context.TenantId}")
-            .SendAsync(HubMethodNames.DeviceToUser.ReceivePingResponse, new
+            .ReceivePingResponse(new PingResponse
             {
                 DeviceId = context.UserId,
                 CommandId = commandId,
@@ -189,10 +190,10 @@ public class DeviceHub : Hub
             "Device {DeviceId} acknowledged {CommandType} command {CommandId} - Success: {Success}, Message: {Message}",
             context.UserId, commandType, commandId, success, message);
 
-        // Forward acknowledgment to all users in the tenant
+        // Forward acknowledgment to all users in the tenant using strongly-typed interface
         await _userHubContext.Clients
             .Group($"tenant:{context.TenantId}")
-            .SendAsync(HubMethodNames.DeviceToUser.ReceiveCommandAcknowledgment, new
+            .ReceiveCommandAcknowledgment(new CommandAcknowledgment
             {
                 DeviceId = context.UserId,
                 CommandId = commandId,
@@ -247,10 +248,10 @@ public class DeviceHub : Hub
                 success,
                 errorMessage);
 
-            // Forward result to all users in the tenant
+            // Forward result to all users in the tenant using strongly-typed interface
             await _userHubContext.Clients
                 .Group($"tenant:{context.TenantId}")
-                .SendAsync(HubMethodNames.DeviceToUser.ReceiveOSQueryResult, new
+                .ReceiveOSQueryResult(new OSQueryResult
                 {
                     DeviceId = deviceId,
                     ExecutionId = executionId,
